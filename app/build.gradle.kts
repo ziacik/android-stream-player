@@ -17,10 +17,13 @@ val torrServerAssets = mapOf(
         "9bab078a0976b86ff392c9eee756194643f4e939ee2c9504dfd4ab7094ef9490",
     ),
 )
-val generatedTorrServerJniLibs = layout.buildDirectory.dir("generated/torrserver/jniLibs")
+val generatedTorrServerJniLibsDir = layout.buildDirectory
+    .dir("generated/torrserver/jniLibs")
+    .get()
+    .asFile
 
 val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
-    outputs.dir(generatedTorrServerJniLibs)
+    outputs.dir(generatedTorrServerJniLibsDir)
 
     doLast {
         val abi = torrServerAbi.get()
@@ -28,7 +31,7 @@ val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
             ?: throw GradleException("Unsupported TorrServer ABI: $abi")
         val assetName = asset.first
         val expectedSha256 = asset.second
-        val outputDir = generatedTorrServerJniLibs.get().dir(abi).asFile
+        val outputDir = generatedTorrServerJniLibsDir.resolve(abi)
         val outputFile = outputDir.resolve("libtorrserver.so")
 
         fun sha256(file: java.io.File): String {
@@ -97,7 +100,7 @@ android {
     }
 
     sourceSets {
-        getByName("main").jniLibs.srcDir(generatedTorrServerJniLibs)
+        getByName("main").jniLibs.srcDir(generatedTorrServerJniLibsDir)
     }
 
     packaging {
