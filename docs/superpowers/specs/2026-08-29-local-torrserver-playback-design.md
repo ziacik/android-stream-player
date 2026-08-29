@@ -76,6 +76,12 @@ On `stop()` (IO dispatcher):
 
 The process is activity-owned for this proof. No foreground service is introduced yet. `MainActivity.onDestroy()` must stop Media3 first and then stop TorrServer off the main thread.
 
+## Local HTTP policy
+
+Media3 reads a plain HTTP URL on `127.0.0.1`. Because the app targets SDK 36, cleartext HTTP must be explicitly allowed for this proof. Set `android:usesCleartextTraffic="true"` on the application. The server itself remains bound to loopback only, so this does not expose TorrServer on the LAN.
+
+This is a proof-only policy; a production hardening pass can replace it with a narrower network-security configuration.
+
 ## HTTP client
 
 Create `TorrServerClient` around the existing OkHttp dependency.
@@ -86,7 +92,7 @@ It exposes:
 suspend fun awaitReady()
 suspend fun assertRamCache()
 fun streamUrl(magnet: String, fileIndex: Int = 0): String
-fun shutdown()
+suspend fun shutdown()
 ```
 
 The stream URL uses TorrServer's HTTP streaming API:
@@ -108,7 +114,7 @@ Replace the proof's `LibtorrentTorrentStreamer` with `TorrServerTorrentStreamer`
 3. build the `streamUrl` with `index=0`;
 4. return a normal `TorrentSource(uri = streamUrl)`.
 
-The existing `TorrentSource` URI path is deliberately reused. This means Media3 no longer needs the custom `TorrentDataSource` for TorrServer playback: `Media3PlayerPort.prepare(TorrentSource)` can play the localhost HTTP URL normally and Media3/OkHttp/TorrServer handle HTTP range/seek behavior.
+The existing `TorrentSource` URI path is deliberately reused. This means Media3 no longer needs the custom `TorrentDataSource` for TorrServer playback: `Media3PlayerPort.prepare(TorrentSource)` can play the localhost HTTP URL normally and Media3/TorrServer handle HTTP range/seek behavior.
 
 The libtorrent4j-specific classes and dependencies are removed from the active runtime after the TorrServer path is working. Pure helper tests may be deleted if they only exist for the abandoned piece-storage backend.
 
@@ -145,7 +151,7 @@ TDD seams:
 
 1. `TorrServerClientTest`
    - builds a correctly encoded localhost stream URL for a magnet containing multiple `&tr=` parameters;
-   - health polling succeeds/fails deterministically through a fake HTTP endpoint or injected request seam.
+   - health polling succeeds/fails deterministically through an injected request seam.
 2. `TorrServerTorrentStreamerTest`
    - starts/ensures server and returns the HTTP `TorrentSource`;
    - rejects missing magnet.
