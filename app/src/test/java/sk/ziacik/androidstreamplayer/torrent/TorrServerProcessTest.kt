@@ -52,6 +52,7 @@ class TorrServerProcessTest {
 
         assertEquals(1, launcher.launchCount)
         assertEquals(1, client.awaitReadyCount)
+        assertEquals(1, client.configureStreamingSettingsCount)
         assertEquals(1, client.assertRamCacheCount)
         assertEquals("madvdontneed=1", launcher.lastEnvironment["GODEBUG"])
     }
@@ -102,11 +103,16 @@ class TorrServerProcessTest {
         private val failReadiness: Boolean = false,
     ) : TorrServerControlClient {
         var awaitReadyCount = 0
+        var configureStreamingSettingsCount = 0
         var assertRamCacheCount = 0
 
         override suspend fun awaitReady(timeoutMs: Long) {
             awaitReadyCount++
             if (failReadiness) error("not ready")
+        }
+
+        override suspend fun configureStreamingSettings() {
+            configureStreamingSettingsCount++
         }
 
         override suspend fun assertRamCache() {
