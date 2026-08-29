@@ -24,6 +24,12 @@ internal fun interface TorrServerHttpTransport {
     suspend fun execute(request: Request): TorrServerHttpResponse
 }
 
+internal interface TorrServerControlClient {
+    suspend fun awaitReady(timeoutMs: Long = 10_000L)
+    suspend fun assertRamCache()
+    suspend fun shutdown()
+}
+
 internal class OkHttpTorrServerTransport(
     private val client: OkHttpClient = OkHttpClient(),
 ) : TorrServerHttpTransport {
@@ -42,7 +48,7 @@ internal class TorrServerClient(
     private val transport: TorrServerHttpTransport = OkHttpTorrServerTransport(),
     private val baseUrl: HttpUrl = "http://127.0.0.1:18090".toHttpUrl(),
     private val pollIntervalMs: Long = 200L,
-) {
+) : TorrServerControlClient {
     fun streamUrl(
         magnet: String,
         fileIndex: Int = 1,
@@ -55,7 +61,7 @@ internal class TorrServerClient(
         .build()
         .toString()
 
-    suspend fun awaitReady(timeoutMs: Long = 10_000L) {
+    override suspend fun awaitReady(timeoutMs: Long) {
         require(timeoutMs > 0) { "timeoutMs must be positive" }
 
         val ready = withTimeoutOrNull(timeoutMs) {
@@ -84,7 +90,7 @@ internal class TorrServerClient(
         }
     }
 
-    suspend fun assertRamCache() {
+    override suspend fun assertRamCache() {
         val requestBody = SETTINGS_GET_JSON.toRequestBody(JSON_MEDIA_TYPE)
         val response = transport.execute(
             Request.Builder()
@@ -106,7 +112,7 @@ internal class TorrServerClient(
         }
     }
 
-    suspend fun shutdown() {
+    override suspend fun shutdown() {
         try {
             transport.execute(
                 Request.Builder()
