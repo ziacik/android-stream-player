@@ -121,6 +121,7 @@ internal class TorrServerProcess(
 
         try {
             client.awaitReady()
+            client.configureStreamingSettings()
             client.assertRamCache()
         } catch (error: Throwable) {
             terminate(started)
