@@ -23,6 +23,7 @@ val generatedTorrServerJniLibsDir = layout.buildDirectory
     .asFile
 
 val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
+    notCompatibleWithConfigurationCache("Downloads and verifies the pinned TorrServer release asset")
     outputs.dir(generatedTorrServerJniLibsDir)
 
     doLast {
