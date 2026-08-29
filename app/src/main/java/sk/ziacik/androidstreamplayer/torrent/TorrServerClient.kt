@@ -57,6 +57,7 @@ internal class TorrServerClient(
         .addPathSegment("video")
         .addQueryParameter("link", magnet)
         .addQueryParameter("index", fileIndex.toString())
+        .addQueryParameter("preload", null)
         .addQueryParameter("play", null)
         .build()
         .toString()
