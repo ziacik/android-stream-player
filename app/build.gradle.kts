@@ -36,6 +36,10 @@ dependencies {
     implementation(libs.androidx.media3.ui)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.libtorrent4j.android.arm)
+    implementation(libs.libtorrent4j.android.arm64)
+    implementation(libs.libtorrent4j.android.x86)
+    implementation(libs.libtorrent4j.android.x86.x64)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
