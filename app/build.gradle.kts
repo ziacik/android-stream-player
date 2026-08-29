@@ -3,6 +3,83 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+val torrServerAbi = providers.gradleProperty("torrserverAbi").orElse("arm64-v8a")
+val torrServerAssets = mapOf(
+    "arm64-v8a" to Pair(
+        "TorrServer-android-arm64",
+        "23cea145c38e948f1a967c7fdbcb9c71506cd21a2fe7b3723903e233a323465b",
+    ),
+    "armeabi-v7a" to Pair(
+        "TorrServer-android-arm7",
+        "9bab078a0976b86ff392c9eee756194643f4e939ee2c9504dfd4ab7094ef9490",
+    ),
+)
+val generatedTorrServerJniLibs = layout.buildDirectory.dir("generated/torrserver/jniLibs")
+
+val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
+    outputs.dir(generatedTorrServerJniLibs)
+
+    doLast {
+        val abi = torrServerAbi.get()
+        val asset = torrServerAssets[abi]
+            ?: throw GradleException("Unsupported TorrServer ABI: $abi")
+        val assetName = asset.first
+        val expectedSha256 = asset.second
+        val outputDir = generatedTorrServerJniLibs.get().dir(abi).asFile
+        val outputFile = outputDir.resolve("libtorrserver.so")
+
+        fun sha256(file: java.io.File): String {
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            file.inputStream().buffered().use { input ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
+
+        if (outputFile.isFile && sha256(outputFile) == expectedSha256) {
+            logger.lifecycle("Using cached TorrServer $abi binary")
+            return@doLast
+        }
+
+        outputDir.mkdirs()
+        val temporaryFile = outputDir.resolve("libtorrserver.so.tmp")
+        temporaryFile.delete()
+        outputFile.delete()
+
+        val url = java.net.URI(
+            "https://github.com/YouROK/TorrServer/releases/download/MatriX.143/$assetName",
+        ).toURL()
+        logger.lifecycle("Downloading TorrServer $assetName")
+        url.openConnection().apply {
+            connectTimeout = 30_000
+            readTimeout = 120_000
+        }.getInputStream().buffered().use { input ->
+            temporaryFile.outputStream().buffered().use { output ->
+                input.copyTo(output)
+            }
+        }
+
+        val actualSha256 = sha256(temporaryFile)
+        if (actualSha256 != expectedSha256) {
+            temporaryFile.delete()
+            throw GradleException(
+                "TorrServer SHA-256 mismatch for $assetName: expected $expectedSha256, got $actualSha256",
+            )
+        }
+
+        if (!temporaryFile.renameTo(outputFile)) {
+            temporaryFile.copyTo(outputFile, overwrite = true)
+            temporaryFile.delete()
+        }
+        logger.lifecycle("Prepared TorrServer $abi at ${outputFile.absolutePath}")
+    }
+}
+
 android {
     namespace = "sk.ziacik.androidstreamplayer"
     compileSdk = 36
@@ -16,6 +93,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    sourceSets {
+        getByName("main").jniLibs.srcDir(generatedTorrServerJniLibs)
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            keepDebugSymbols += setOf("**/libtorrserver.so")
+        }
+    }
+
     buildFeatures {
         compose = true
     }
@@ -24,6 +112,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn(prepareTorrServerBinary)
 }
 
 dependencies {
