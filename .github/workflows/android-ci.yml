@@ -32,6 +32,15 @@ jobs:
         with:
           gradle-version: '9.5.0'
 
+      - name: Verify deploy script
+        run: |
+          test -x deploy-debug
+          sh -n deploy-debug
+
+      - name: Verify old libtorrent backend is gone
+        run: |
+          ! grep -R -E 'libtorrent4j|TorrentPieceAccess' app/src app/build.gradle.kts gradle/libs.versions.toml
+
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
@@ -40,3 +49,8 @@ jobs:
 
       - name: Verify TorrServer executable packaging
         run: unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -q 'lib/arm64-v8a/libtorrserver.so'
+
+      - name: Verify 32-bit TorrServer binary
+        run: |
+          ./gradlew :app:prepareTorrServerBinary -PtorrserverAbi=armeabi-v7a --rerun-tasks --stacktrace
+          test -f app/build/generated/torrserver/jniLibs/armeabi-v7a/libtorrserver.so
