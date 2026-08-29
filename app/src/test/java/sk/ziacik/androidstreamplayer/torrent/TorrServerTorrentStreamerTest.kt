@@ -9,7 +9,7 @@ import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 
 class TorrServerTorrentStreamerTest {
     @Test
-    fun prepareStartsRuntimeAndReturnsLocalStreamUrl() = runTest {
+    fun prepareStartsRuntimeAndReturnsPreparedLocalStreamUrl() = runTest {
         val runtime = FakeRuntime()
         val streamer = TorrServerTorrentStreamer(runtime)
         val result = result("magnet:?xt=urn:btih:abcdef&tr=udp://tracker/announce")
@@ -18,8 +18,8 @@ class TorrServerTorrentStreamerTest {
 
         assertEquals(1, runtime.ensureReadyCount)
         assertEquals(result.magnetUri, runtime.lastMagnet)
-        assertEquals(1, runtime.lastFileIndex)
-        assertEquals("http://127.0.0.1:18090/stream/video", source.uri)
+        assertEquals(1, runtime.prepareStreamUrlCount)
+        assertEquals("http://127.0.0.1:18090/stream/movie.mkv?link=hash&index=7&preload&play", source.uri)
     }
 
     @Test
@@ -33,7 +33,7 @@ class TorrServerTorrentStreamerTest {
 
         assertTrue(failure is IllegalArgumentException)
         assertEquals(0, runtime.ensureReadyCount)
-        assertFalse(runtime.streamUrlCalled)
+        assertFalse(runtime.prepareStreamUrlCalled)
     }
 
     private fun result(magnet: String) = TorrentSearchResult(
@@ -44,19 +44,19 @@ class TorrServerTorrentStreamerTest {
 
     private class FakeRuntime : TorrServerRuntime {
         var ensureReadyCount = 0
-        var streamUrlCalled = false
+        var prepareStreamUrlCalled = false
+        var prepareStreamUrlCount = 0
         var lastMagnet: String? = null
-        var lastFileIndex: Int? = null
 
         override suspend fun ensureReady() {
             ensureReadyCount++
         }
 
-        override fun streamUrl(magnet: String, fileIndex: Int): String {
-            streamUrlCalled = true
+        override suspend fun prepareStreamUrl(magnet: String): String {
+            prepareStreamUrlCalled = true
+            prepareStreamUrlCount++
             lastMagnet = magnet
-            lastFileIndex = fileIndex
-            return "http://127.0.0.1:18090/stream/video"
+            return "http://127.0.0.1:18090/stream/movie.mkv?link=hash&index=7&preload&play"
         }
 
         override suspend fun stop() = Unit
