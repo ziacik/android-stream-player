@@ -11,7 +11,8 @@ adb -s "$target" install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s "$target" shell am force-stop "$package"
 
 if [ -n "$magnet" ]; then
-    adb -s "$target" shell am start -n "$activity" --es magnet "$magnet"
+    escaped_magnet=$(printf '%s' "$magnet" | sed "s/'/'\\\\''/g")
+    adb -s "$target" shell "am start -n '$activity' --es magnet '$escaped_magnet'"
 else
     adb -s "$target" shell am start -n "$activity"
 fi
