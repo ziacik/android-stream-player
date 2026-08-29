@@ -28,6 +28,7 @@ internal fun interface TorrServerHttpTransport {
 
 internal interface TorrServerControlClient {
     suspend fun awaitReady(timeoutMs: Long = 10_000L)
+    suspend fun configureStreamingSettings()
     suspend fun assertRamCache()
     suspend fun shutdown()
 }
@@ -67,7 +68,7 @@ internal class TorrServerClient(
 
     suspend fun prepareStreamUrl(
         magnet: String,
-        timeoutMs: Long = 60_000L,
+        timeoutMs: Long = METADATA_TIMEOUT_MS,
     ): String {
         require(timeoutMs > 0) { "timeoutMs must be positive" }
 
@@ -129,23 +130,31 @@ internal class TorrServerClient(
         }
     }
 
-    override suspend fun assertRamCache() {
-        val requestBody = SETTINGS_GET_JSON.toRequestBody(JSON_MEDIA_TYPE)
-        val response = transport.execute(
-            Request.Builder()
-                .url(url("settings"))
-                .post(requestBody)
-                .build(),
-        )
-
-        if (!response.isSuccessful) {
-            throw IOException("TorrServer settings request failed with HTTP ${response.code}")
+    override suspend fun configureStreamingSettings() {
+        val currentResponse = settingsRequest(JSONObject().put("action", "get"))
+        val settings = try {
+            JSONObject(currentResponse.body)
+        } catch (error: Exception) {
+            throw IOException("Invalid TorrServer settings response", error)
         }
 
-        val useDiskMatch = USE_DISK_REGEX.find(response.body)
-            ?: throw IOException("TorrServer settings did not include UseDisk")
-        val useDisk = useDiskMatch.groupValues[1].toBooleanStrictOrNull()
-            ?: throw IOException("Invalid TorrServer UseDisk setting")
+        settings.put("UseDisk", false)
+        settings.put("TorrentDisconnectTimeout", TORRENT_DISCONNECT_TIMEOUT_SECONDS)
+
+        settingsRequest(
+            JSONObject()
+                .put("action", "set")
+                .put("sets", settings),
+        )
+    }
+
+    override suspend fun assertRamCache() {
+        val response = settingsRequest(JSONObject().put("action", "get"))
+        val useDisk = try {
+            JSONObject(response.body).getBoolean("UseDisk")
+        } catch (error: Exception) {
+            throw IOException("TorrServer settings did not include valid UseDisk", error)
+        }
         if (useDisk) {
             throw IOException("TorrServer disk cache is enabled")
         }
@@ -223,6 +232,19 @@ internal class TorrServerClient(
         }
     }
 
+    private suspend fun settingsRequest(body: JSONObject): TorrServerHttpResponse {
+        val response = transport.execute(
+            Request.Builder()
+                .url(url("settings"))
+                .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
+                .build(),
+        )
+        if (!response.isSuccessful) {
+            throw IOException("TorrServer settings request failed with HTTP ${response.code}")
+        }
+        return response
+    }
+
     private fun url(pathSegment: String): HttpUrl = baseUrl.newBuilder()
         .addPathSegment(pathSegment)
         .build()
@@ -240,8 +262,8 @@ internal class TorrServerClient(
 
     private companion object {
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-        const val SETTINGS_GET_JSON = "{\"action\":\"get\"}"
-        val USE_DISK_REGEX = Regex("\\\"UseDisk\\\"\\s*:\\s*(true|false)", RegexOption.IGNORE_CASE)
+        const val METADATA_TIMEOUT_MS = 90_000L
+        const val TORRENT_DISCONNECT_TIMEOUT_SECONDS = 120
         val VIDEO_EXTENSIONS = setOf("mkv", "mp4", "m4v", "webm", "ts")
     }
 }
