@@ -16,7 +16,7 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class TorrServerClientTest {
     @Test
-    fun streamUrlKeepsWholeMagnetInsideLinkParameter() {
+    fun streamUrlIsPlayOnly() {
         val magnet = "magnet:?xt=urn:btih:abcdef&dn=Video&tr=udp://tracker.one/announce&tr=https://tracker.two/announce"
         val client = TorrServerClient(
             transport = FakeTransport(),
@@ -29,12 +29,12 @@ class TorrServerClientTest {
         assertEquals("/stream/video", url.encodedPath)
         assertEquals(magnet, url.queryParameter("link"))
         assertEquals("1", url.queryParameter("index"))
-        assertTrue(url.queryParameterNames.contains("preload"))
+        assertFalse(url.queryParameterNames.contains("preload"))
         assertTrue(url.queryParameterNames.contains("play"))
     }
 
     @Test
-    fun prepareStreamSelectsLargestVideoFileAndUsesTorrentHash() = runTest {
+    fun prepareStreamPreloadsSelectedVideoBeforeReturningPlayUrl() = runTest {
         val magnet = "magnet:?xt=urn:btih:abcdef&dn=Video"
         val transport = FakeTransport(
             responses = mutableListOf(
@@ -46,6 +46,7 @@ class TorrServerClientTest {
                     code = 200,
                     body = """{"hash":"hash123","file_stats":[{"id":1,"path":"README.txt","length":999999999},{"id":4,"path":"sample.mkv","length":1000},{"id":7,"path":"folder/movie.mkv","length":9000}]}""",
                 ),
+                TorrServerHttpResponse(code = 200, body = ""),
             ),
         )
         val client = TorrServerClient(
@@ -58,11 +59,22 @@ class TorrServerClientTest {
         assertEquals("/stream/movie.mkv", url.encodedPath)
         assertEquals("hash123", url.queryParameter("link"))
         assertEquals("7", url.queryParameter("index"))
-        assertTrue(url.queryParameterNames.contains("preload"))
+        assertFalse(url.queryParameterNames.contains("preload"))
         assertTrue(url.queryParameterNames.contains("play"))
-        assertEquals(2, transport.requests.size)
-        assertTrue(transport.requests.all { it.url.encodedPath == "/torrents" })
-        assertTrue(transport.requests.all { it.method == "POST" })
+
+        assertEquals(3, transport.requests.size)
+        assertEquals("/torrents", transport.requests[0].url.encodedPath)
+        assertEquals("POST", transport.requests[0].method)
+        assertEquals("/torrents", transport.requests[1].url.encodedPath)
+        assertEquals("POST", transport.requests[1].method)
+
+        val preload = transport.requests[2]
+        assertEquals("GET", preload.method)
+        assertEquals("/stream/movie.mkv", preload.url.encodedPath)
+        assertEquals("hash123", preload.url.queryParameter("link"))
+        assertEquals("7", preload.url.queryParameter("index"))
+        assertTrue(preload.url.queryParameterNames.contains("preload"))
+        assertFalse(preload.url.queryParameterNames.contains("play"))
     }
 
     @Test
