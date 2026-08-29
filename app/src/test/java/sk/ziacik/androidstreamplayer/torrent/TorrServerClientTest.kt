@@ -4,7 +4,9 @@ import java.io.IOException
 import kotlinx.coroutines.test.runTest
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -61,6 +63,36 @@ class TorrServerClientTest {
         assertEquals(2, transport.requests.size)
         assertTrue(transport.requests.all { it.url.encodedPath == "/torrents" })
         assertTrue(transport.requests.all { it.method == "POST" })
+    }
+
+    @Test
+    fun configureStreamingSettingsPreservesExistingSettingsAndExtendsDisconnectTimeout() = runTest {
+        val transport = FakeTransport(
+            responses = mutableListOf(
+                TorrServerHttpResponse(
+                    code = 200,
+                    body = """{"CacheSize":67108864,"ReaderReadAHead":95,"PreloadCache":50,"UseDisk":false,"TorrentDisconnectTimeout":30,"ConnectionsLimit":25,"EnableDHT":true}""",
+                ),
+                TorrServerHttpResponse(code = 200, body = ""),
+            ),
+        )
+        val client = TorrServerClient(transport = transport)
+
+        client.configureStreamingSettings()
+
+        assertEquals(2, transport.requests.size)
+        val getBody = JSONObject(transport.requests[0].bodyAsString())
+        assertEquals("get", getBody.getString("action"))
+
+        val setBody = JSONObject(transport.requests[1].bodyAsString())
+        assertEquals("set", setBody.getString("action"))
+        val settings = setBody.getJSONObject("sets")
+        assertEquals(120, settings.getInt("TorrentDisconnectTimeout"))
+        assertFalse(settings.getBoolean("UseDisk"))
+        assertEquals(67108864, settings.getInt("CacheSize"))
+        assertEquals(95, settings.getInt("ReaderReadAHead"))
+        assertEquals(25, settings.getInt("ConnectionsLimit"))
+        assertTrue(settings.getBoolean("EnableDHT"))
     }
 
     @Test
@@ -144,6 +176,12 @@ class TorrServerClientTest {
 
         assertNotNull(error)
         assertTrue(error?.message.orEmpty().contains("timeout", ignoreCase = true))
+    }
+
+    private fun Request.bodyAsString(): String {
+        val buffer = okio.Buffer()
+        body?.writeTo(buffer)
+        return buffer.readUtf8()
     }
 
     private class FakeTransport(
