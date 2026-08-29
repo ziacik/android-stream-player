@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream
 import java.io.InputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -72,6 +73,29 @@ class TorrServerProcessTest {
         runCatching { process.ensureStarted() }
 
         assertTrue(child.destroyCalled || child.destroyForciblyCalled)
+    }
+
+    @Test
+    fun processLaunchRunsOffCallerThread() = runBlocking {
+        val callerThread = Thread.currentThread()
+        var launchThread: Thread? = null
+        val child = FakeChildProcess()
+        val launcher = TorrServerProcessLauncher { _, _ ->
+            launchThread = Thread.currentThread()
+            child
+        }
+        val process = TorrServerProcess(
+            binaryPath = "/tmp/libtorrserver.so",
+            dataPath = "/tmp/torrserver",
+            launcher = launcher,
+            client = FakeControlClient(),
+            scope = CoroutineScope(SupervisorJob()),
+            validateBinary = false,
+        )
+
+        process.ensureStarted()
+
+        assertTrue(launchThread != null && launchThread !== callerThread)
     }
 
     private class FakeControlClient(
