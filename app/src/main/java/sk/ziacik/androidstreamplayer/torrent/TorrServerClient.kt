@@ -1,5 +1,6 @@
 package sk.ziacik.androidstreamplayer.torrent
 
+import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -11,6 +12,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 
 internal data class TorrServerHttpResponse(
     val code: Int,
@@ -50,17 +52,65 @@ internal class TorrServerClient(
     private val pollIntervalMs: Long = 200L,
 ) : TorrServerControlClient {
     fun streamUrl(
-        magnet: String,
+        link: String,
         fileIndex: Int = 1,
+        fileName: String = "video",
     ): String = baseUrl.newBuilder()
         .addPathSegment("stream")
-        .addPathSegment("video")
-        .addQueryParameter("link", magnet)
+        .addPathSegment(fileName)
+        .addQueryParameter("link", link)
         .addQueryParameter("index", fileIndex.toString())
         .addQueryParameter("preload", null)
         .addQueryParameter("play", null)
         .build()
         .toString()
+
+    suspend fun prepareStreamUrl(
+        magnet: String,
+        timeoutMs: Long = 60_000L,
+    ): String {
+        require(timeoutMs > 0) { "timeoutMs must be positive" }
+
+        val added = torrentRequest(
+            JSONObject()
+                .put("action", "add")
+                .put("link", magnet)
+                .put("save_to_db", false),
+        )
+        if (added.hash.isBlank()) {
+            throw IOException("TorrServer did not return torrent hash")
+        }
+
+        val ready = if (added.files.isNotEmpty()) {
+            added
+        } else {
+            withTimeoutOrNull(timeoutMs) {
+                while (true) {
+                    val torrent = torrentRequest(
+                        JSONObject()
+                            .put("action", "get")
+                            .put("hash", added.hash),
+                    )
+                    if (torrent.files.isNotEmpty()) {
+                        return@withTimeoutOrNull torrent
+                    }
+                    delay(pollIntervalMs)
+                }
+            } ?: throw IOException("TorrServer metadata timeout")
+        }
+
+        val file = ready.files
+            .asSequence()
+            .filter { it.path.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS }
+            .maxByOrNull { it.length }
+            ?: throw IOException("Torrent contains no playable video file")
+
+        return streamUrl(
+            link = ready.hash,
+            fileIndex = file.id,
+            fileName = File(file.path).name,
+        )
+    }
 
     override suspend fun awaitReady(timeoutMs: Long) {
         require(timeoutMs > 0) { "timeoutMs must be positive" }
@@ -126,13 +176,62 @@ internal class TorrServerClient(
         }
     }
 
+    private suspend fun torrentRequest(body: JSONObject): TorrServerTorrentInfo {
+        val response = transport.execute(
+            Request.Builder()
+                .url(url("torrents"))
+                .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
+                .build(),
+        )
+        if (!response.isSuccessful) {
+            throw IOException("TorrServer torrent request failed with HTTP ${response.code}")
+        }
+
+        return try {
+            val json = JSONObject(response.body)
+            val filesJson = json.optJSONArray("file_stats")
+            val files = buildList {
+                if (filesJson != null) {
+                    for (index in 0 until filesJson.length()) {
+                        val file = filesJson.getJSONObject(index)
+                        add(
+                            TorrServerFileInfo(
+                                id = file.getInt("id"),
+                                path = file.getString("path"),
+                                length = file.getLong("length"),
+                            ),
+                        )
+                    }
+                }
+            }
+            TorrServerTorrentInfo(
+                hash = json.optString("hash"),
+                files = files,
+            )
+        } catch (error: Exception) {
+            throw IOException("Invalid TorrServer torrent response", error)
+        }
+    }
+
     private fun url(pathSegment: String): HttpUrl = baseUrl.newBuilder()
         .addPathSegment(pathSegment)
         .build()
+
+    private data class TorrServerTorrentInfo(
+        val hash: String,
+        val files: List<TorrServerFileInfo>,
+    )
+
+    private data class TorrServerFileInfo(
+        val id: Int,
+        val path: String,
+        val length: Long,
+    )
 
     private companion object {
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         const val SETTINGS_GET_JSON = "{\"action\":\"get\"}"
         val USE_DISK_REGEX = Regex("\\\"UseDisk\\\"\\s*:\\s*(true|false)", RegexOption.IGNORE_CASE)
+        val VIDEO_EXTENSIONS = setOf("mkv", "mp4", "m4v", "webm", "ts")
     }
 }
