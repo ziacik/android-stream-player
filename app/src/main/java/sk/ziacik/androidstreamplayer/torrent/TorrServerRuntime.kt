@@ -2,7 +2,7 @@ package sk.ziacik.androidstreamplayer.torrent
 
 internal interface TorrServerRuntime {
     suspend fun ensureReady()
-    fun streamUrl(magnet: String, fileIndex: Int = 1): String
+    suspend fun prepareStreamUrl(magnet: String): String
     suspend fun stop()
 }
 
@@ -14,8 +14,8 @@ internal class LocalTorrServerRuntime(
         process.ensureStarted()
     }
 
-    override fun streamUrl(magnet: String, fileIndex: Int): String =
-        client.streamUrl(magnet, fileIndex)
+    override suspend fun prepareStreamUrl(magnet: String): String =
+        client.prepareStreamUrl(magnet)
 
     override suspend fun stop() {
         process.stop()
