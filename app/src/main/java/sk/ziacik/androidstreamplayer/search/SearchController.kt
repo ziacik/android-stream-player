@@ -47,6 +47,24 @@ class SearchController(
     }
 
     private fun performSearch(query: String) {
+        if (query.startsWith("magnet:?", ignoreCase = true)) {
+            _state.value = _state.value.copy(
+                isSearching = false,
+                results = listOf(
+                    TorrentSearchResult(
+                        id = "direct-magnet",
+                        title = "Magnet torrent",
+                        magnetUri = query,
+                        source = "Magnet",
+                    ),
+                ),
+                errorMessage = null,
+                selectedResult = null,
+                streamStatus = null,
+            )
+            return
+        }
+
         _state.value = _state.value.copy(
             isSearching = true,
             errorMessage = null,
