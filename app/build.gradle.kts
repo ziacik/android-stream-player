@@ -1,3 +1,6 @@
+import java.net.URI
+import java.security.MessageDigest
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
@@ -29,7 +32,7 @@ val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
         val outputFile = outputDir.resolve("libtorrserver.so")
 
         fun sha256(file: java.io.File): String {
-            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            val digest = MessageDigest.getInstance("SHA-256")
             file.inputStream().buffered().use { input ->
                 val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                 while (true) {
@@ -38,7 +41,7 @@ val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
                     digest.update(buffer, 0, count)
                 }
             }
-            return digest.digest().joinToString("") { "%02x".format(it) }
+            return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
         }
 
         if (outputFile.isFile && sha256(outputFile) == expectedSha256) {
@@ -51,7 +54,7 @@ val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
         temporaryFile.delete()
         outputFile.delete()
 
-        val url = java.net.URI(
+        val url = URI(
             "https://github.com/YouROK/TorrServer/releases/download/MatriX.143/$assetName",
         ).toURL()
         logger.lifecycle("Downloading TorrServer $assetName")
