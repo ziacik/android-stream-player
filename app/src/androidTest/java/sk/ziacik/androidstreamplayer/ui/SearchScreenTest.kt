@@ -14,19 +14,25 @@ import org.junit.Rule
 import org.junit.Test
 import sk.ziacik.androidstreamplayer.search.FakeTorrentSearchProvider
 import sk.ziacik.androidstreamplayer.search.SearchController
+import sk.ziacik.androidstreamplayer.torrent.TorrentSource
+import sk.ziacik.androidstreamplayer.torrent.TorrentStreamer
 
 class SearchScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
 
     @Test
-    fun searchResultCanBeSelected() {
+    fun searchResultCanBeSelectedForPlayback() {
         val controller = SearchController(
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
             provider = FakeTorrentSearchProvider(),
+            streamer = TorrentStreamer { TorrentSource("torrent://stream/test.mkv") },
         )
         composeRule.setContent {
-            SearchScreen(controller = controller)
+            SearchScreen(
+                controller = controller,
+                player = null,
+            )
         }
 
         composeRule.onNodeWithTag("search-field").performTextInput("Alien")
@@ -36,6 +42,9 @@ class SearchScreenTest {
         }
 
         composeRule.onNodeWithTag("result-Alien-2160p").performClick()
-        composeRule.onNodeWithText("Streaming not implemented yet").assertIsDisplayed()
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("Playing").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("Playing").assertIsDisplayed()
     }
 }
