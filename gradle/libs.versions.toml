@@ -9,6 +9,7 @@ coroutines = "1.10.2"
 junit = "4.13.2"
 androidxTestRunner = "1.7.0"
 libtorrent4j = "2.1.0-38"
+robolectric = "4.16.1"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -30,6 +31,7 @@ libtorrent4j-android-arm = { module = "org.libtorrent4j:libtorrent4j-android-arm
 libtorrent4j-android-arm64 = { module = "org.libtorrent4j:libtorrent4j-android-arm64", version.ref = "libtorrent4j" }
 libtorrent4j-android-x86 = { module = "org.libtorrent4j:libtorrent4j-android-x86", version.ref = "libtorrent4j" }
 libtorrent4j-android-x64 = { module = "org.libtorrent4j:libtorrent4j-android-x86_64", version.ref = "libtorrent4j" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
