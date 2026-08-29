@@ -81,22 +81,10 @@ internal class TorrServerClient(
             throw IOException("TorrServer did not return torrent hash")
         }
 
-        val ready = if (added.files.isNotEmpty()) {
+        val ready: TorrServerTorrentInfo = if (added.files.isNotEmpty()) {
             added
         } else {
-            withTimeoutOrNull(timeoutMs) {
-                while (true) {
-                    val torrent = torrentRequest(
-                        JSONObject()
-                            .put("action", "get")
-                            .put("hash", added.hash),
-                    )
-                    if (torrent.files.isNotEmpty()) {
-                        return@withTimeoutOrNull torrent
-                    }
-                    delay(pollIntervalMs)
-                }
-            } ?: throw IOException("TorrServer metadata timeout")
+            awaitTorrentFiles(added.hash, timeoutMs)
         }
 
         val file = ready.files
@@ -174,6 +162,28 @@ internal class TorrServerClient(
         } catch (_: IOException) {
             // The process may close the socket while shutting itself down.
         }
+    }
+
+    private suspend fun awaitTorrentFiles(
+        hash: String,
+        timeoutMs: Long,
+    ): TorrServerTorrentInfo {
+        var found: TorrServerTorrentInfo? = null
+        withTimeoutOrNull(timeoutMs) {
+            while (found == null) {
+                val torrent = torrentRequest(
+                    JSONObject()
+                        .put("action", "get")
+                        .put("hash", hash),
+                )
+                if (torrent.files.isNotEmpty()) {
+                    found = torrent
+                } else {
+                    delay(pollIntervalMs)
+                }
+            }
+        }
+        return found ?: throw IOException("TorrServer metadata timeout")
     }
 
     private suspend fun torrentRequest(body: JSONObject): TorrServerTorrentInfo {
