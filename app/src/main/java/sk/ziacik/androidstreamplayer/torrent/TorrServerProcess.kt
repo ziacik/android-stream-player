@@ -13,6 +13,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 internal fun buildTorrServerCommand(
     binaryPath: String,
@@ -91,22 +92,24 @@ internal class TorrServerProcess(
     suspend fun ensureStarted() = lifecycleMutex.withLock {
         if (child?.isAlive == true) return@withLock
 
-        if (validateBinary) {
-            val binary = File(binaryPath)
-            if (!binary.isFile) {
-                throw IOException("TorrServer binary not found: $binaryPath")
+        val started = withContext(Dispatchers.IO) {
+            if (validateBinary) {
+                val binary = File(binaryPath)
+                if (!binary.isFile) {
+                    throw IOException("TorrServer binary not found: $binaryPath")
+                }
             }
-        }
 
-        val dataDir = File(dataPath)
-        if (!dataDir.exists() && !dataDir.mkdirs()) {
-            throw IOException("Unable to create TorrServer data directory: $dataPath")
-        }
+            val dataDir = File(dataPath)
+            if (!dataDir.exists() && !dataDir.mkdirs()) {
+                throw IOException("Unable to create TorrServer data directory: $dataPath")
+            }
 
-        val started = launcher.launch(
-            command = buildTorrServerCommand(binaryPath, dataPath),
-            environment = mapOf("GODEBUG" to "madvdontneed=1"),
-        )
+            launcher.launch(
+                command = buildTorrServerCommand(binaryPath, dataPath),
+                environment = mapOf("GODEBUG" to "madvdontneed=1"),
+            )
+        }
         child = started
         logJob = scope.launch(Dispatchers.IO) {
             runCatching {
@@ -142,12 +145,12 @@ internal class TorrServerProcess(
         logJob = null
     }
 
-    private fun terminate(process: TorrServerChildProcess) {
-        if (!process.isAlive) return
+    private suspend fun terminate(process: TorrServerChildProcess) = withContext(Dispatchers.IO) {
+        if (!process.isAlive) return@withContext
 
-        if (process.waitFor(GRACEFUL_WAIT_MS)) return
+        if (process.waitFor(GRACEFUL_WAIT_MS)) return@withContext
         process.destroy()
-        if (process.waitFor(DESTROY_WAIT_MS)) return
+        if (process.waitFor(DESTROY_WAIT_MS)) return@withContext
         process.destroyForcibly()
         process.waitFor(FORCE_WAIT_MS)
     }
