@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - feature/foundation
+      - feature/torrent-playback-proof
   pull_request:
 
 jobs:
