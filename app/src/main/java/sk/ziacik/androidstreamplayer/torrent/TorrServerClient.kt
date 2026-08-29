@@ -2,6 +2,7 @@ package sk.ziacik.androidstreamplayer.torrent
 
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -36,15 +37,32 @@ internal interface TorrServerControlClient {
 internal class OkHttpTorrServerTransport(
     private val client: OkHttpClient = OkHttpClient(),
 ) : TorrServerHttpTransport {
+    private val preloadClient = client.newBuilder()
+        .readTimeout(PRELOAD_READ_TIMEOUT_MINUTES, TimeUnit.MINUTES)
+        .callTimeout(PRELOAD_READ_TIMEOUT_MINUTES, TimeUnit.MINUTES)
+        .build()
+
     override suspend fun execute(request: Request): TorrServerHttpResponse =
         withContext(Dispatchers.IO) {
-            client.newCall(request).execute().use { response ->
+            val requestClient = if (
+                request.url.queryParameterNames.contains("preload") &&
+                !request.url.queryParameterNames.contains("play")
+            ) {
+                preloadClient
+            } else {
+                client
+            }
+            requestClient.newCall(request).execute().use { response ->
                 TorrServerHttpResponse(
                     code = response.code,
                     body = response.body.string(),
                 )
             }
         }
+
+    private companion object {
+        const val PRELOAD_READ_TIMEOUT_MINUTES = 10L
+    }
 }
 
 internal class TorrServerClient(
@@ -56,15 +74,12 @@ internal class TorrServerClient(
         link: String,
         fileIndex: Int = 1,
         fileName: String = "video",
-    ): String = baseUrl.newBuilder()
-        .addPathSegment("stream")
-        .addPathSegment(fileName)
-        .addQueryParameter("link", link)
-        .addQueryParameter("index", fileIndex.toString())
-        .addQueryParameter("preload", null)
-        .addQueryParameter("play", null)
-        .build()
-        .toString()
+    ): String = streamRequestUrl(
+        link = link,
+        fileIndex = fileIndex,
+        fileName = fileName,
+        action = "play",
+    ).toString()
 
     suspend fun prepareStreamUrl(
         magnet: String,
@@ -93,11 +108,29 @@ internal class TorrServerClient(
             .filter { it.path.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS }
             .maxByOrNull { it.length }
             ?: throw IOException("Torrent contains no playable video file")
+        val fileName = File(file.path).name
+
+        val preloadResponse = transport.execute(
+            Request.Builder()
+                .url(
+                    streamRequestUrl(
+                        link = ready.hash,
+                        fileIndex = file.id,
+                        fileName = fileName,
+                        action = "preload",
+                    ),
+                )
+                .get()
+                .build(),
+        )
+        if (!preloadResponse.isSuccessful) {
+            throw IOException("TorrServer preload failed with HTTP ${preloadResponse.code}")
+        }
 
         return streamUrl(
             link = ready.hash,
             fileIndex = file.id,
-            fileName = File(file.path).name,
+            fileName = fileName,
         )
     }
 
@@ -244,6 +277,19 @@ internal class TorrServerClient(
         }
         return response
     }
+
+    private fun streamRequestUrl(
+        link: String,
+        fileIndex: Int,
+        fileName: String,
+        action: String,
+    ): HttpUrl = baseUrl.newBuilder()
+        .addPathSegment("stream")
+        .addPathSegment(fileName)
+        .addQueryParameter("link", link)
+        .addQueryParameter("index", fileIndex.toString())
+        .addQueryParameter(action, null)
+        .build()
 
     private fun url(pathSegment: String): HttpUrl = baseUrl.newBuilder()
         .addPathSegment(pathSegment)
