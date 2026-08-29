@@ -50,6 +50,8 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by controller.state.collectAsState()
+    val streamStatus = state.streamStatus
+    val errorMessage = state.errorMessage
     val searchFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -99,9 +101,9 @@ fun SearchScreen(
             Spacer(Modifier.height(28.dp))
 
             when {
-                state.streamStatus != null -> StreamStatus(
+                streamStatus != null -> StreamStatus(
                     result = state.selectedResult,
-                    status = state.streamStatus,
+                    status = streamStatus,
                 )
 
                 state.isSearching -> Row(
@@ -112,9 +114,9 @@ fun SearchScreen(
                     Text("Searching torrents…")
                 }
 
-                state.errorMessage != null -> Column {
+                errorMessage != null -> Column {
                     Text(
-                        text = state.errorMessage,
+                        text = errorMessage,
                         color = MaterialTheme.colorScheme.error,
                     )
                     Spacer(Modifier.height(12.dp))
