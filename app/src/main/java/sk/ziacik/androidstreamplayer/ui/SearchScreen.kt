@@ -39,17 +39,43 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.PlayerView
 import java.util.Locale
 import sk.ziacik.androidstreamplayer.search.SearchController
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 
+@UnstableApi
 @Composable
 fun SearchScreen(
     controller: SearchController,
+    player: Player? = null,
     modifier: Modifier = Modifier,
 ) {
     val state by controller.state.collectAsState()
     val streamStatus = state.streamStatus
+
+    if (streamStatus == "Playing" && player != null) {
+        AndroidView(
+            factory = { context ->
+                PlayerView(context).apply {
+                    this.player = player
+                    useController = true
+                    keepScreenOn = true
+                }
+            },
+            update = { view ->
+                view.player = player
+            },
+            modifier = modifier
+                .fillMaxSize()
+                .testTag("player-view"),
+        )
+        return
+    }
+
     val errorMessage = state.errorMessage
     val searchFocusRequester = remember { FocusRequester() }
 
@@ -82,8 +108,8 @@ fun SearchScreen(
                         .focusRequester(searchFocusRequester)
                         .testTag("search-field"),
                     singleLine = true,
-                    label = { Text("Movie") },
-                    placeholder = { Text("Search torrents…") },
+                    label = { Text("Movie or magnet") },
+                    placeholder = { Text("Search torrents or paste magnet…") },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { controller.search() }),
                 )
