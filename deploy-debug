@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+target="${1:-192.168.0.200:5555}"
+package="sk.ziacik.androidstreamplayer"
+
+./gradlew assembleDebug
+adb -s "$target" install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s "$target" shell am force-stop "$package"
+adb -s "$target" shell monkey -p "$package" 1
