@@ -23,6 +23,22 @@ class SearchControllerTest {
     }
 
     @Test
+    fun `magnet query becomes direct result without calling provider`() = runTest {
+        val provider = RecordingProvider()
+        val controller = SearchController(this, provider)
+        val magnet = "magnet:?xt=urn:btih:0123456789abcdef"
+
+        controller.setQuery(magnet)
+        controller.search()
+        advanceUntilIdle()
+
+        assertEquals(0, provider.calls)
+        assertEquals(1, controller.state.value.results.size)
+        assertEquals(magnet, controller.state.value.results.single().magnetUri)
+        assertEquals("Magnet", controller.state.value.results.single().source)
+    }
+
+    @Test
     fun `successful search publishes results`() = runTest {
         val expected = result("Alien.1080p", "1080p")
         val controller = SearchController(this, RecordingProvider(results = listOf(expected)))
