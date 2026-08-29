@@ -8,7 +8,7 @@ The existing search/controller UI may remain. The backend boundary changes from 
 
 ## Scope
 
-This proof supports one active torrent at a time and the current single-file runtime magnet. The selected file index is therefore `0` for this spike. Multi-file torrent inspection/selection is explicitly deferred.
+This proof supports one active torrent at a time and the current single-file runtime magnet. TorrServer file indices are 1-based, so the selected file index is `1` for this spike. Multi-file torrent inspection/selection is explicitly deferred.
 
 No remote TorrServer is required. No TorrServer binary is downloaded at app runtime. No magnet is committed to git.
 
@@ -91,14 +91,14 @@ It exposes:
 ```kotlin
 suspend fun awaitReady()
 suspend fun assertRamCache()
-fun streamUrl(magnet: String, fileIndex: Int = 0): String
+fun streamUrl(magnet: String, fileIndex: Int = 1): String
 suspend fun shutdown()
 ```
 
 The stream URL uses TorrServer's HTTP streaming API:
 
 ```text
-http://127.0.0.1:18090/stream/video?link=<url-encoded-magnet>&index=0&play
+http://127.0.0.1:18090/stream/video?link=<url-encoded-magnet>&index=1&play
 ```
 
 The magnet must be encoded as a query parameter by `HttpUrl`/OkHttp rather than hand-concatenated, because magnets contain `&` tracker parameters.
@@ -111,7 +111,7 @@ Replace the proof's `LibtorrentTorrentStreamer` with `TorrServerTorrentStreamer`
 
 1. validate a nonblank `magnetUri`;
 2. ensure the local TorrServer process is healthy;
-3. build the `streamUrl` with `index=0`;
+3. build the `streamUrl` with `index=1`;
 4. return a normal `TorrentSource(uri = streamUrl)`.
 
 The existing `TorrentSource` URI path is deliberately reused. This means Media3 no longer needs the custom `TorrentDataSource` for TorrServer playback: `Media3PlayerPort.prepare(TorrentSource)` can play the localhost HTTP URL normally and Media3/TorrServer handle HTTP range/seek behavior.
