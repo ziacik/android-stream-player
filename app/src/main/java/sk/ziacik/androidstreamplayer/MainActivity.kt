@@ -11,12 +11,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import org.libtorrent4j.SessionManager
 import sk.ziacik.androidstreamplayer.player.Media3PlayerPort
 import sk.ziacik.androidstreamplayer.search.FakeTorrentSearchProvider
 import sk.ziacik.androidstreamplayer.search.SearchController
-import sk.ziacik.androidstreamplayer.torrent.LibtorrentSessionBackend
-import sk.ziacik.androidstreamplayer.torrent.LibtorrentTorrentStreamer
+import sk.ziacik.androidstreamplayer.torrent.LocalTorrServerRuntime
+import sk.ziacik.androidstreamplayer.torrent.TorrServerClient
+import sk.ziacik.androidstreamplayer.torrent.TorrServerProcess
+import sk.ziacik.androidstreamplayer.torrent.TorrServerRuntime
+import sk.ziacik.androidstreamplayer.torrent.TorrServerTorrentStreamer
 import sk.ziacik.androidstreamplayer.ui.SearchScreen
 import sk.ziacik.androidstreamplayer.ui.theme.AndroidStreamPlayerTheme
 
@@ -27,7 +29,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var searchController: SearchController
     private lateinit var playerPort: Media3PlayerPort
-    private lateinit var torrentBackend: LibtorrentSessionBackend
+    private lateinit var torrentRuntime: TorrServerRuntime
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,11 +41,19 @@ class MainActivity : ComponentActivity() {
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
 
         playerPort = Media3PlayerPort(this)
-        torrentBackend = LibtorrentSessionBackend(
-            sessionManager = SessionManager(),
-            rootDir = File(cacheDir, "torrent-streams"),
+
+        val torrServerClient = TorrServerClient()
+        val torrServerProcess = TorrServerProcess(
+            binaryPath = File(applicationInfo.nativeLibraryDir, TORRSERVER_BINARY).absolutePath,
+            dataPath = File(noBackupFilesDir, TORRSERVER_DATA_DIR).absolutePath,
+            client = torrServerClient,
+            scope = cleanupScope,
         )
-        val torrentStreamer = LibtorrentTorrentStreamer(torrentBackend)
+        torrentRuntime = LocalTorrServerRuntime(
+            process = torrServerProcess,
+            client = torrServerClient,
+        )
+        val torrentStreamer = TorrServerTorrentStreamer(torrentRuntime)
 
         searchController = SearchController(
             scope = appScope,
@@ -83,10 +93,10 @@ class MainActivity : ComponentActivity() {
         }
         appScope.cancel()
 
-        if (::torrentBackend.isInitialized) {
+        if (::torrentRuntime.isInitialized) {
             cleanupScope.launch {
                 try {
-                    torrentBackend.stop()
+                    torrentRuntime.stop()
                 } finally {
                     cleanupScope.cancel()
                 }
@@ -106,5 +116,7 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val EXTRA_MAGNET = "magnet"
+        const val TORRSERVER_BINARY = "libtorrserver.so"
+        const val TORRSERVER_DATA_DIR = "torrserver"
     }
 }
