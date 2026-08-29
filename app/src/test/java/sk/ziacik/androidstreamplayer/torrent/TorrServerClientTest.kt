@@ -29,6 +29,38 @@ class TorrServerClientTest {
     }
 
     @Test
+    fun prepareStreamSelectsLargestVideoFileAndUsesTorrentHash() = runTest {
+        val magnet = "magnet:?xt=urn:btih:abcdef&dn=Video"
+        val transport = FakeTransport(
+            responses = mutableListOf(
+                TorrServerHttpResponse(
+                    code = 200,
+                    body = """{"hash":"hash123","file_stats":null}""",
+                ),
+                TorrServerHttpResponse(
+                    code = 200,
+                    body = """{"hash":"hash123","file_stats":[{"id":1,"path":"README.txt","length":999999999},{"id":4,"path":"sample.mkv","length":1000},{"id":7,"path":"folder/movie.mkv","length":9000}]}""",
+                ),
+            ),
+        )
+        val client = TorrServerClient(
+            transport = transport,
+            pollIntervalMs = 1,
+        )
+
+        val url = client.prepareStreamUrl(magnet, timeoutMs = 1_000).toHttpUrl()
+
+        assertEquals("/stream/movie.mkv", url.encodedPath)
+        assertEquals("hash123", url.queryParameter("link"))
+        assertEquals("7", url.queryParameter("index"))
+        assertTrue(url.queryParameterNames.contains("preload"))
+        assertTrue(url.queryParameterNames.contains("play"))
+        assertEquals(2, transport.requests.size)
+        assertTrue(transport.requests.all { it.url.encodedPath == "/torrents" })
+        assertTrue(transport.requests.all { it.method == "POST" })
+    }
+
+    @Test
     fun ramCacheSettingsAcceptDiskDisabled() = runTest {
         val transport = FakeTransport(
             responses = mutableListOf(
