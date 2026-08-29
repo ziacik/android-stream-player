@@ -5,11 +5,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.yield
+import sk.ziacik.androidstreamplayer.torrent.TorrentSource
+import sk.ziacik.androidstreamplayer.torrent.TorrentStreamer
 
 class SearchController(
     private val scope: CoroutineScope,
     private val provider: TorrentSearchProvider,
+    private val streamer: TorrentStreamer? = null,
+    private val onStreamReady: (TorrentSource) -> Unit = {},
 ) {
     private val _state = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = _state.asStateFlow()
@@ -40,9 +43,27 @@ class SearchController(
             selectedResult = result,
             streamStatus = "Preparing stream…",
         )
+
         scope.launch {
-            yield()
-            _state.value = _state.value.copy(streamStatus = "Streaming not implemented yet")
+            val activeStreamer = streamer
+            if (activeStreamer == null) {
+                _state.value = _state.value.copy(streamStatus = "Streaming unavailable")
+                return@launch
+            }
+
+            runCatching { activeStreamer.prepare(result) }
+                .onSuccess { source ->
+                    runCatching { onStreamReady(source) }
+                        .onSuccess {
+                            _state.value = _state.value.copy(streamStatus = "Playing")
+                        }
+                        .onFailure {
+                            _state.value = _state.value.copy(streamStatus = "Playback failed")
+                        }
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(streamStatus = "Stream failed")
+                }
         }
     }
 
