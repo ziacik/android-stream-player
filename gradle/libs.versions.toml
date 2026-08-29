@@ -29,7 +29,7 @@ androidx-test-runner = { module = "androidx.test:runner", version.ref = "android
 libtorrent4j-android-arm = { module = "org.libtorrent4j:libtorrent4j-android-arm", version.ref = "libtorrent4j" }
 libtorrent4j-android-arm64 = { module = "org.libtorrent4j:libtorrent4j-android-arm64", version.ref = "libtorrent4j" }
 libtorrent4j-android-x86 = { module = "org.libtorrent4j:libtorrent4j-android-x86", version.ref = "libtorrent4j" }
-libtorrent4j-android-x86-64 = { module = "org.libtorrent4j:libtorrent4j-android-x86_64", version.ref = "libtorrent4j" }
+libtorrent4j-android-x64 = { module = "org.libtorrent4j:libtorrent4j-android-x86_64", version.ref = "libtorrent4j" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
