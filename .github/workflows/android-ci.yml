@@ -41,6 +41,9 @@ jobs:
         run: |
           ! grep -R -E 'libtorrent4j|TorrentPieceAccess' app/src app/build.gradle.kts gradle/libs.versions.toml
 
+      - name: Verify Media3 MKV fix version
+        run: grep -q '^media3 = "1.11.0"$' gradle/libs.versions.toml
+
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
