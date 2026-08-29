@@ -1,10 +1,17 @@
 #!/bin/sh
 set -eu
 
-target="${1:-192.168.0.200:5555}"
+magnet="${1:-}"
+target="${2:-192.168.0.200:5555}"
 package="sk.ziacik.androidstreamplayer"
+activity="$package/.MainActivity"
 
 ./gradlew assembleDebug
 adb -s "$target" install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s "$target" shell am force-stop "$package"
-adb -s "$target" shell monkey -p "$package" 1
+
+if [ -n "$magnet" ]; then
+    adb -s "$target" shell am start -n "$activity" --es magnet "$magnet"
+else
+    adb -s "$target" shell am start -n "$activity"
+fi
