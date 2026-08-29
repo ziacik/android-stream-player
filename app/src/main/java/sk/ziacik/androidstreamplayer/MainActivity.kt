@@ -63,6 +63,11 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+
+        intent.getStringExtra(EXTRA_MAGNET)
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let(::startMagnet)
     }
 
     override fun onStop() {
@@ -91,5 +96,15 @@ class MainActivity : ComponentActivity() {
         }
 
         super.onDestroy()
+    }
+
+    private fun startMagnet(magnet: String) {
+        searchController.setQuery(magnet)
+        searchController.search()
+        searchController.state.value.results.singleOrNull()?.let(searchController::select)
+    }
+
+    private companion object {
+        const val EXTRA_MAGNET = "magnet"
     }
 }
