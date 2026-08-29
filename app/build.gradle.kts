@@ -24,6 +24,7 @@ val generatedTorrServerJniLibsDir = layout.buildDirectory
 
 val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
     notCompatibleWithConfigurationCache("Downloads and verifies the pinned TorrServer release asset")
+    inputs.property("torrserverAbi", torrServerAbi)
     outputs.dir(generatedTorrServerJniLibsDir)
 
     doLast {
@@ -32,6 +33,15 @@ val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
             ?: throw GradleException("Unsupported TorrServer ABI: $abi")
         val assetName = asset.first
         val expectedSha256 = asset.second
+
+        generatedTorrServerJniLibsDir.listFiles()
+            ?.filter { it.name != abi }
+            ?.forEach { staleAbiDir ->
+                if (!staleAbiDir.deleteRecursively()) {
+                    throw GradleException("Could not remove stale TorrServer ABI directory: $staleAbiDir")
+                }
+            }
+
         val outputDir = generatedTorrServerJniLibsDir.resolve(abi)
         val outputFile = outputDir.resolve("libtorrserver.so")
 
