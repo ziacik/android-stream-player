@@ -24,6 +24,7 @@ class TorrServerClientTest {
         assertEquals("/stream/video", url.encodedPath)
         assertEquals(magnet, url.queryParameter("link"))
         assertEquals("1", url.queryParameter("index"))
+        assertTrue(url.queryParameterNames.contains("preload"))
         assertTrue(url.queryParameterNames.contains("play"))
     }
 
