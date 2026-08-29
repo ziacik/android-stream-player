@@ -7,6 +7,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import sk.ziacik.androidstreamplayer.torrent.TorrentSource
+import sk.ziacik.androidstreamplayer.torrent.TorrentStreamer
 
 class SearchControllerTest {
     @Test
@@ -91,9 +93,21 @@ class SearchControllerTest {
     }
 
     @Test
-    fun `selecting result reaches streaming placeholder`() = runTest {
+    fun `selecting result prepares torrent and starts playback`() = runTest {
         val selected = result("Alien.2160p", "2160p")
-        val controller = SearchController(this, RecordingProvider())
+        val source = TorrentSource("torrent://stream/Alien.mkv")
+        var preparedResult: TorrentSearchResult? = null
+        var playedSource: TorrentSource? = null
+        val streamer = TorrentStreamer { result ->
+            preparedResult = result
+            source
+        }
+        val controller = SearchController(
+            scope = this,
+            provider = RecordingProvider(),
+            streamer = streamer,
+            onStreamReady = { playedSource = it },
+        )
 
         controller.select(selected)
         assertEquals(selected, controller.state.value.selectedResult)
@@ -101,7 +115,25 @@ class SearchControllerTest {
 
         advanceUntilIdle()
 
-        assertEquals("Streaming not implemented yet", controller.state.value.streamStatus)
+        assertEquals(selected, preparedResult)
+        assertEquals(source, playedSource)
+        assertEquals("Playing", controller.state.value.streamStatus)
+    }
+
+    @Test
+    fun `stream preparation failure becomes stream error`() = runTest {
+        val selected = result("Alien.2160p", "2160p")
+        val controller = SearchController(
+            scope = this,
+            provider = RecordingProvider(),
+            streamer = TorrentStreamer { throw IllegalStateException("boom") },
+        )
+
+        controller.select(selected)
+        advanceUntilIdle()
+
+        assertEquals(selected, controller.state.value.selectedResult)
+        assertEquals("Stream failed", controller.state.value.streamStatus)
     }
 
     private fun result(title: String, quality: String) = TorrentSearchResult(
