@@ -2,11 +2,10 @@ package sk.ziacik.androidstreamplayer.torrent
 
 import java.io.IOException
 import kotlinx.coroutines.test.runTest
-import okhttp3.Request
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertThrows
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -60,11 +59,15 @@ class TorrServerClientTest {
             ),
         )
 
-        val error = assertThrows(IOException::class.java) {
-            runTest { client.assertRamCache() }
+        var error: IOException? = null
+        try {
+            client.assertRamCache()
+        } catch (caught: IOException) {
+            error = caught
         }
 
-        assertTrue(error.message.orEmpty().contains("disk", ignoreCase = true))
+        assertNotNull(error)
+        assertTrue(error?.message.orEmpty().contains("disk", ignoreCase = true))
     }
 
     @Test
@@ -96,11 +99,15 @@ class TorrServerClientTest {
             pollIntervalMs = 10,
         )
 
-        val error = assertThrows(IOException::class.java) {
-            runTest { client.awaitReady(timeoutMs = 25) }
+        var error: IOException? = null
+        try {
+            client.awaitReady(timeoutMs = 25)
+        } catch (caught: IOException) {
+            error = caught
         }
 
-        assertTrue(error.message.orEmpty().contains("timeout", ignoreCase = true))
+        assertNotNull(error)
+        assertTrue(error?.message.orEmpty().contains("timeout", ignoreCase = true))
     }
 
     private class FakeTransport(
