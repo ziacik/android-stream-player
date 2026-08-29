@@ -13,7 +13,7 @@ internal class TorrServerTorrentStreamer(
 
         runtime.ensureReady()
         return TorrentSource(
-            uri = runtime.streamUrl(magnet, fileIndex = 1),
+            uri = runtime.prepareStreamUrl(magnet),
         )
     }
 }
