@@ -6,7 +6,18 @@ target="${2:-192.168.0.200:5555}"
 package="sk.ziacik.androidstreamplayer"
 activity="$package/.MainActivity"
 
-./gradlew assembleDebug
+device_abi="$(adb -s "$target" shell getprop ro.product.cpu.abi | tr -d '\r')"
+case "$device_abi" in
+    arm64-v8a|armeabi-v7a)
+        ;;
+    *)
+        echo "Unsupported Android TV ABI: $device_abi" >&2
+        exit 3
+        ;;
+esac
+
+echo "Building for Android TV ABI: $device_abi"
+./gradlew assembleDebug -PtorrserverAbi="$device_abi"
 adb -s "$target" install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s "$target" shell am force-stop "$package"
 
