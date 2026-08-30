@@ -39,20 +39,11 @@ internal class OkHttpTorrentSearchTransport(
 internal class KnabenTorrentSearchProvider(
 	private val transport: TorrentSearchHttpTransport = OkHttpTorrentSearchTransport(),
 ) : TorrentSearchProvider {
-	override suspend fun search(query: String): List<TorrentSearchResult> =
-		searchOnce(
-			query = query,
-			categories = listOf(MOVIES_CATEGORY, TV_CATEGORY),
-		)
-
-	suspend fun search(movie: MovieTorrentSearchRequest): List<TorrentSearchResult> {
+	override suspend fun search(movie: MovieTorrentSearchRequest): List<TorrentSearchResult> {
 		val merged = linkedMapOf<String, TorrentSearchResult>()
 
-		movieFallbackQueries(movie).forEach { query ->
-			searchOnce(
-				query = query,
-				categories = listOf(MOVIES_CATEGORY),
-			).forEach { result ->
+		fallbackQueries(movie).forEach { query ->
+			searchQuery(query).forEach { result ->
 				val key = result.deduplicationKey()
 				val existing = merged[key]
 				if (existing == null || result.seederCount() > existing.seederCount()) {
@@ -63,15 +54,11 @@ internal class KnabenTorrentSearchProvider(
 
 		return merged.values.sortedWith(
 			compareByDescending<TorrentSearchResult> { it.seederCount() }
-				.thenByDescending { qualityRank(it.quality) }
-				.thenByDescending { it.sizeBytes ?: -1L },
+				.thenBy { it.title.lowercase() },
 		)
 	}
 
-	private suspend fun searchOnce(
-		query: String,
-		categories: List<Int>,
-	): List<TorrentSearchResult> {
+	private suspend fun searchQuery(query: String): List<TorrentSearchResult> {
 		val normalizedQuery = query.trim()
 		if (normalizedQuery.isEmpty()) return emptyList()
 
@@ -81,9 +68,7 @@ internal class KnabenTorrentSearchProvider(
 			.put("order_direction", "desc")
 			.put(
 				"categories",
-				JSONArray().apply {
-					categories.forEach(::put)
-				},
+				JSONArray().put(MOVIES_CATEGORY),
 			)
 			.put("size", RESULT_LIMIT)
 			.put("hide_unsafe", true)
@@ -133,45 +118,16 @@ internal class KnabenTorrentSearchProvider(
 		}
 	}
 
-	private fun movieFallbackQueries(movie: MovieTorrentSearchRequest): List<String> = buildList {
-		fun addUnique(value: String) {
-			val normalized = value.trim().replace(WHITESPACE, " ")
-			if (normalized.isNotEmpty() && none { it.equals(normalized, ignoreCase = true) }) {
-				add(normalized)
-			}
-		}
-
-		val yearSuffix = movie.year?.let { " $it" }.orEmpty()
-		addUnique(movie.originalTitle + yearSuffix)
-		addUnique(movie.title + yearSuffix)
-		addUnique(movie.originalTitle)
-		addUnique(movie.title)
-	}
-
 	private fun TorrentSearchResult.deduplicationKey(): String {
-		val infoHash = INFO_HASH.find(magnetUri)?.groupValues?.getOrNull(1)
-			?.lowercase()
-		if (!infoHash.isNullOrBlank()) {
-			return "hash:$infoHash"
+		val infoHash = infoHash(magnetUri)
+		return if (infoHash != null) {
+			"hash:$infoHash"
+		} else {
+			"id:${id.lowercase()}"
 		}
-
-		val normalizedTitle = title
-			.lowercase()
-			.replace(NON_ALPHANUMERIC, " ")
-			.trim()
-			.replace(WHITESPACE, " ")
-		return "fallback:$normalizedTitle:${sizeBytes ?: -1L}"
 	}
 
 	private fun TorrentSearchResult.seederCount(): Int = seeders ?: -1
-
-	private fun qualityRank(quality: String?): Int = when (quality?.lowercase()) {
-		"2160p" -> 4
-		"1080p" -> 3
-		"720p" -> 2
-		"480p" -> 1
-		else -> 0
-	}
 
 	private fun inferQuality(title: String): String? = when {
 		title.contains("2160p", ignoreCase = true) ||
@@ -185,11 +141,28 @@ internal class KnabenTorrentSearchProvider(
 	private companion object {
 		const val API_URL = "https://api.knaben.org/v1"
 		const val MOVIES_CATEGORY = 3_000_000
-		const val TV_CATEGORY = 2_000_000
 		const val RESULT_LIMIT = 50
 		val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-		val WHITESPACE = Regex("\\s+")
-		val NON_ALPHANUMERIC = Regex("[^a-z0-9]+")
-		val INFO_HASH = Regex("(?:[?&])xt=urn:btih:([A-Za-z0-9]+)", RegexOption.IGNORE_CASE)
 	}
 }
+
+internal fun fallbackQueries(movie: MovieTorrentSearchRequest): List<String> = buildList {
+	fun addUnique(value: String) {
+		val normalized = value.trim().replace(Regex("\\s+"), " ")
+		if (normalized.isNotBlank() && none { it.equals(normalized, ignoreCase = true) }) {
+			add(normalized)
+		}
+	}
+
+	movie.year?.let { addUnique("${movie.originalTitle} $it") }
+	movie.year?.let { addUnique("${movie.title} $it") }
+	addUnique(movie.originalTitle)
+	addUnique(movie.title)
+}
+
+private fun infoHash(magnet: String): String? =
+	Regex("(?i)[?&]xt=urn:btih:([A-Za-z0-9]+)")
+		.find(magnet)
+		?.groupValues
+		?.getOrNull(1)
+		?.lowercase()
