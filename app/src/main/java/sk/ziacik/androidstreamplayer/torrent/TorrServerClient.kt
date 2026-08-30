@@ -172,6 +172,7 @@ internal class TorrServerClient(
         }
 
         settings.put("UseDisk", false)
+        settings.put("DisableUpload", true)
         settings.put("TorrentDisconnectTimeout", TORRENT_DISCONNECT_TIMEOUT_SECONDS)
 
         settingsRequest(
