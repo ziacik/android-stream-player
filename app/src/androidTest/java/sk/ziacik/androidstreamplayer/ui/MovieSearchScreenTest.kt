@@ -18,6 +18,8 @@ import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.catalog.MovieCatalog
 import sk.ziacik.androidstreamplayer.catalog.MovieExternalIds
 import sk.ziacik.androidstreamplayer.catalog.MovieSearchController
+import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
+import sk.ziacik.androidstreamplayer.watch.WatchProgressEntry
 
 class MovieSearchScreenTest {
 	@get:Rule
@@ -56,6 +58,45 @@ class MovieSearchScreenTest {
 
 		composeRule.runOnIdle {
 			assertEquals(603, selected?.tmdbId)
+		}
+	}
+
+	@Test
+	fun landingShowsResumeWatchingAndClickReturnsStoredEntry() {
+		var resumed: WatchProgressEntry? = null
+		val entry = WatchProgressEntry(
+			movie = matrix(),
+			result = TorrentSearchResult(
+				id = "matrix-1080p",
+				title = "The Matrix 1999 1080p",
+				magnetUri = "magnet:?xt=urn:btih:matrix",
+				quality = "1080p",
+			),
+			positionMs = 300_000L,
+			durationMs = 600_000L,
+			updatedAtEpochMs = 123L,
+		)
+		val controller = MovieSearchController(
+			scope = scope,
+			catalog = FakeCatalog(),
+			debounceMs = 0,
+		)
+
+		composeRule.setContent {
+			MovieSearchScreen(
+				controller = controller,
+				onMovieSelected = {},
+				resumeWatching = listOf(entry),
+				onResumeWatching = { resumed = it },
+				onRemoveResumeWatching = {},
+			)
+		}
+
+		composeRule.onNodeWithText("Resume Watching").assertIsDisplayed()
+		composeRule.onNodeWithTag("resume-watching-603").assertIsDisplayed().performClick()
+
+		composeRule.runOnIdle {
+			assertEquals(entry, resumed)
 		}
 	}
 
