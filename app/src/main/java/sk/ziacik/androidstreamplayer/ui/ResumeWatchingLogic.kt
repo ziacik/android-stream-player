@@ -1,5 +1,7 @@
 package sk.ziacik.androidstreamplayer.ui
 
+internal const val RESUME_WATCHING_LABEL = "Resume Watching"
+
 internal sealed interface ResumeWatchingKeyAction {
 	data object OpenActions : ResumeWatchingKeyAction
 	data object Consume : ResumeWatchingKeyAction
@@ -15,6 +17,8 @@ internal data class ResumeActionsKeyDecision(
 	val consume: Boolean,
 	val waitingForRelease: Boolean,
 )
+
+internal fun resumeWatchingRemoveLabel(): String = "Remove from $RESUME_WATCHING_LABEL"
 
 internal fun resumeWatchingKeyAction(
 	isConfirm: Boolean,
