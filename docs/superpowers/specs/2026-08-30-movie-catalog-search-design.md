@@ -55,7 +55,7 @@ TorrServer
 KinoPlayerScreen
 ```
 
-Back from `MovieDetailScreen` returns to the same catalog query, results, scroll position, and focused movie where practical.
+Back from `MovieDetailScreen` restores the same catalog query, results, scroll position, and focus to the movie that was selected. If that movie is no longer present because the catalog state was replaced, focus falls back to the first visible result.
 
 ## Architecture
 
@@ -189,7 +189,7 @@ Layout:
 
 Opening the detail starts torrent discovery automatically; no separate `Search torrents` action is required.
 
-The first focusable torrent result should receive focus once releases are ready unless doing so would cause disruptive focus movement while the user is reading/navigating metadata.
+While torrent discovery is loading there is no artificial focus jump. When the first non-empty release list arrives, focus moves exactly once to the first torrent result. Subsequent state updates must not steal focus from the user's current selection.
 
 Back returns to the catalog result previously selected.
 
