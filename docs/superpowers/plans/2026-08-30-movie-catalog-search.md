@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the torrent-first landing screen with a zero-configuration, TMDB-backed movie catalog where users browse posters, open a cinematic detail, choose a Knaben torrent release, and play it through the existing TorrServer/Media3 player.
+**Goal:** Replace the torrent-first landing screen with a zero-configuration TMDB movie catalog where users browse posters, open a cinematic detail, choose a Knaben torrent release, and play it through the existing TorrServer/Media3 player.
 
-**Architecture:** Keep the app single-module and split responsibilities into three boundaries: `MovieCatalog` for TMDB metadata, `TorrentSearchProvider`/`TorrentSearchController` for movie-aware torrent discovery, and `PlaybackController` for torrent preparation/player transition. `KinoApp` composes the linear Catalog → Detail → Player flow while preserving catalog state when navigating back.
+**Architecture:** Keep the app single-module. `MovieCatalog` owns TMDB metadata; `MovieSearchController` owns catalog query/results/focus; `TorrentSearchController` owns movie-to-release discovery; `PlaybackController` owns torrent preparation/player transition. `KinoApp` composes the linear Catalog → Detail → Player flow and keeps catalog state alive while detail/player screens are shown.
 
-**Tech Stack:** Kotlin 2.3.21, Android SDK 36/minSdk 26, Jetpack Compose BOM 2026.06.00, OkHttp 5.1.0, Coroutines 1.10.2, Media3 1.11.0, Coil 3.6.0, org.json, JUnit 4, Compose UI tests.
+**Tech Stack:** Kotlin 2.3.21, Android SDK 36/minSdk 26, Jetpack Compose BOM 2026.06.00, OkHttp 5.1.0, Coroutines 1.10.2, Media3 1.11.0, Coil 3.4.0, org.json, JUnit 4, Compose UI tests.
 
 **Spec:** `docs/superpowers/specs/2026-08-30-movie-catalog-search-design.md`
 
@@ -14,64 +14,65 @@
 
 - Movies only; no TV series, seasons, or episodes.
 - End users configure nothing: TMDB and Knaben are built into the app flow.
-- TMDB API v3 is the catalog source; search uses `/3/search/movie`, external IDs use `/3/movie/{movie_id}/external_ids`.
-- `include_adult=false`; initial TMDB language is `en-US`.
-- TMDB credential is supplied at build/release time and embedded as `BuildConfig.TMDB_API_KEY`; never commit a real credential.
-- Poster/backdrop loading uses Coil and TMDB image URLs.
-- Knaben remains the only built-in torrent provider in this iteration.
-- Knaben movie fallback order is `originalTitle + year`, `title + year`, `originalTitle`, `title`, skipping duplicate query strings.
-- Merge all useful fallback results, deduplicate by BitTorrent info-hash when possible, and sort primarily by seeders descending.
-- Knaben requests for this flow use the movie category only (`3_000_000`).
-- Keep existing TorrServer, Media3 player, and Kino player OSD behavior unless integration requires a narrow adapter change.
-- Back from detail restores the previous catalog query/results and returns focus to the selected poster.
-- D-pad behavior must be deterministic: Up from the first poster row reaches search; Down from search enters the poster grid; on detail load the first torrent row receives focus once results are ready.
-- All feature work stays on `feature/movie-catalog-search`; do not modify `master` directly.
+- TMDB API v3 search uses `/3/search/movie`; IMDb lookup uses `/3/movie/{movie_id}/external_ids`.
+- Send `include_adult=false` and `language=en-US` to TMDB movie search.
+- TMDB credential is embedded as `BuildConfig.TMDB_API_KEY`; never commit a real credential.
+- Release builds must fail clearly when the TMDB key is missing; debug/test builds may use `ci-placeholder`.
+- Use Coil 3.4.0 for poster/backdrop loading. It is compiled with Kotlin 2.3.10 and is compatible with the project’s Kotlin 2.3.21; do not upgrade the project Kotlin as part of this feature.
+- Knaben remains the only torrent provider in this iteration and requires no user configuration.
+- Knaben fallback order is `originalTitle + year`, `title + year`, `originalTitle`, `title`; skip duplicate strings but run every distinct fallback.
+- Merge fallback results, deduplicate primarily by normalized BTIH info-hash, keep the healthier duplicate, then sort by seeders descending.
+- Knaben uses only the movie category `3_000_000` in this flow.
+- Preserve existing TorrServer, Media3, and Kino player OSD behavior.
+- Back from Player → same Detail; Back from Detail → same catalog query/results/scroll/focused poster.
+- Search focus: initial focus on input; Down enters the poster grid; Up from first grid row returns to input.
+- Detail focus: once torrent results arrive, first torrent receives focus exactly once for that result set.
+- All work remains on `feature/movie-catalog-search` until deliberate review/merge.
 
 ---
 
-## File Structure
+## File Map
 
-### New catalog boundary
+### Create
 
-- `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/Movie.kt` — immutable movie identity/metadata model.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/MovieCatalog.kt` — catalog interface plus external-ID model.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/TmdbMovieCatalog.kt` — TMDB HTTP calls, JSON mapping, image URL helpers.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/MovieSearchUiState.kt` — catalog-only UI state.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/MovieSearchController.kt` — query debounce, cancellation/supersession, error/result state, focused movie restoration.
+- `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/Movie.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/MovieCatalog.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/TmdbMovieCatalog.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/MovieSearchUiState.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/MovieSearchController.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/search/MovieTorrentSearchRequest.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/search/TorrentSearchUiState.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/search/TorrentSearchController.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/playback/PlaybackUiState.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/playback/PlaybackController.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/ui/MoviePosterCard.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/ui/MovieSearchScreen.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/ui/TorrentResults.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/ui/MovieDetailScreen.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/ui/KinoApp.kt`
+- corresponding unit/instrumentation test files listed per task below.
 
-### Reshaped torrent/playback boundary
+### Modify
 
-- `app/src/main/java/sk/ziacik/androidstreamplayer/search/MovieTorrentSearchRequest.kt` — movie identity handed to torrent providers.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/search/TorrentSearchProvider.kt` — change from free-text query to movie request.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/search/KnabenTorrentSearchProvider.kt` — fallback queries, movie-only category, result merge/dedupe/sort.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/search/TorrentSearchUiState.kt` — detail-page release discovery state.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/search/TorrentSearchController.kt` — resolve IMDb ID, search torrents, retry.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/playback/PlaybackUiState.kt` — selected release/preparation status.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/playback/PlaybackController.kt` — existing select/prepare/play/exit behavior extracted from `SearchController`.
+- `gradle/libs.versions.toml`
+- `app/build.gradle.kts`
+- `.github/workflows/android-ci.yml`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/search/TorrentSearchProvider.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/search/KnabenTorrentSearchProvider.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/search/FakeTorrentSearchProvider.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/MainActivity.kt`
 
-### New UI flow
+### Delete after migration
 
-- `app/src/main/java/sk/ziacik/androidstreamplayer/ui/KinoApp.kt` — Catalog/Detail/Player coordinator.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/ui/MovieSearchScreen.kt` — search field + Netflix-style poster grid.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/ui/MoviePosterCard.kt` — focused poster component.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/ui/MovieDetailScreen.kt` — backdrop/poster/metadata + torrent section.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/ui/TorrentResults.kt` — compact TV-focused release rows and loading/error/empty states.
-
-### Existing files modified/removed
-
-- `gradle/libs.versions.toml` — add Coil 3.6.0.
-- `app/build.gradle.kts` — enable BuildConfig, wire TMDB key, add Coil dependencies.
-- `.github/workflows/android-ci.yml` — include feature branch and use a non-secret placeholder key for compile/test tasks; real release builds still require a real key.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/MainActivity.kt` — construct new controllers and render `KinoApp`.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/search/FakeTorrentSearchProvider.kt` — update test/fake contract or remove if no longer used.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/search/SearchController.kt` — remove after responsibilities have migrated.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/search/SearchUiState.kt` — remove after responsibilities have migrated.
-- `app/src/main/java/sk/ziacik/androidstreamplayer/ui/SearchScreen.kt` — remove after new UI is integrated.
-- `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/SearchScreenTest.kt` — replace with movie catalog flow test.
+- `app/src/main/java/sk/ziacik/androidstreamplayer/search/SearchController.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/search/SearchUiState.kt`
+- `app/src/main/java/sk/ziacik/androidstreamplayer/ui/SearchScreen.kt`
+- `app/src/test/java/sk/ziacik/androidstreamplayer/search/SearchControllerTest.kt`
+- `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/SearchScreenTest.kt`
 
 ---
 
-### Task 1: Add TMDB build configuration and catalog HTTP client
+### Task 1: TMDB build config, model, and HTTP client
 
 **Files:**
 - Modify: `gradle/libs.versions.toml`
@@ -80,140 +81,152 @@
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/Movie.kt`
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/MovieCatalog.kt`
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/TmdbMovieCatalog.kt`
-- Create: `app/src/test/java/sk/ziacik/androidstreamplayer/catalog/TmdbMovieCatalogTest.kt`
+- Test: `app/src/test/java/sk/ziacik/androidstreamplayer/catalog/TmdbMovieCatalogTest.kt`
 
 **Interfaces:**
-- Produces:
-  ```kotlin
-  data class Movie(
-      val tmdbId: Int,
-      val imdbId: String? = null,
-      val title: String,
-      val originalTitle: String,
-      val releaseYear: Int?,
-      val overview: String?,
-      val voteAverage: Double?,
-      val posterPath: String?,
-      val backdropPath: String?,
-  )
 
-  data class MovieExternalIds(val imdbId: String?)
+```kotlin
+data class Movie(
+    val tmdbId: Int,
+    val imdbId: String? = null,
+    val title: String,
+    val originalTitle: String,
+    val releaseYear: Int?,
+    val overview: String?,
+    val voteAverage: Double?,
+    val posterPath: String?,
+    val backdropPath: String?,
+)
 
-  interface MovieCatalog {
-      suspend fun search(query: String): List<Movie>
-      suspend fun externalIds(tmdbId: Int): MovieExternalIds
-  }
-  ```
+data class MovieExternalIds(val imdbId: String?)
 
-- [ ] **Step 1: Add failing TMDB mapping/request tests**
+interface MovieCatalog {
+    suspend fun search(query: String): List<Movie>
+    suspend fun externalIds(tmdbId: Int): MovieExternalIds
+}
 
-Create `TmdbMovieCatalogTest.kt` with a recording HTTP transport. Cover both endpoints and missing optional fields:
+internal data class TmdbHttpResponse(val code: Int, val body: String)
+internal fun interface TmdbHttpTransport {
+    suspend fun execute(request: Request): TmdbHttpResponse
+}
+```
+
+- [ ] **Step 1: Write failing TMDB request/mapping tests**
+
+Add these concrete cases to `TmdbMovieCatalogTest`:
 
 ```kotlin
 @Test
-fun `search requests movie catalog without adult content and maps results`() = runTest {
+fun `search requests movie endpoint and maps metadata`() = runTest {
     val transport = RecordingTmdbTransport(
-        response = TmdbHttpResponse(
-            200,
-            """{
-              "results": [{
-                "id": 603,
-                "title": "The Matrix",
-                "original_title": "The Matrix",
-                "release_date": "1999-03-30",
-                "overview": "A hacker discovers reality is a simulation.",
-                "vote_average": 8.2,
-                "poster_path": "/poster.jpg",
-                "backdrop_path": "/backdrop.jpg"
-              }]
-            }""",
-        ),
+        TmdbHttpResponse(200, """{
+          "results":[{
+            "id":603,
+            "title":"The Matrix",
+            "original_title":"The Matrix",
+            "release_date":"1999-03-30",
+            "overview":"A hacker discovers reality is a simulation.",
+            "vote_average":8.2,
+            "poster_path":"/poster.jpg",
+            "backdrop_path":"/backdrop.jpg"
+          }]
+        }"""),
     )
-    val catalog = TmdbMovieCatalog(apiKey = "test-key", transport = transport)
+    val result = TmdbMovieCatalog("test-key", transport).search("Matrix").single()
 
-    val result = catalog.search("Matrix")
-
-    assertEquals(603, result.single().tmdbId)
-    assertEquals(1999, result.single().releaseYear)
+    assertEquals(603, result.tmdbId)
+    assertEquals(1999, result.releaseYear)
+    assertEquals("/3/search/movie", transport.request!!.url.encodedPath)
     assertEquals("Matrix", transport.request!!.url.queryParameter("query"))
     assertEquals("false", transport.request!!.url.queryParameter("include_adult"))
     assertEquals("en-US", transport.request!!.url.queryParameter("language"))
+    assertEquals("test-key", transport.request!!.url.queryParameter("api_key"))
 }
 
 @Test
-fun `external ids returns imdb id`() = runTest {
-    val transport = RecordingTmdbTransport(TmdbHttpResponse(200, """{"imdb_id":"tt0133093"}"""))
-    val catalog = TmdbMovieCatalog(apiKey = "test-key", transport = transport)
-
-    assertEquals("tt0133093", catalog.externalIds(603).imdbId)
-    assertEquals("/3/movie/603/external_ids", transport.request!!.url.encodedPath)
-}
-
-@Test
-fun `missing optional movie metadata stays valid`() = runTest {
+fun `missing optional metadata maps to null`() = runTest {
     val transport = RecordingTmdbTransport(
         TmdbHttpResponse(200, """{"results":[{"id":1,"title":"X","original_title":"X"}]}"""),
     )
     val movie = TmdbMovieCatalog("test-key", transport).search("X").single()
 
     assertNull(movie.releaseYear)
+    assertNull(movie.overview)
+    assertNull(movie.voteAverage)
     assertNull(movie.posterPath)
     assertNull(movie.backdropPath)
 }
+
+@Test
+fun `external ids returns imdb id`() = runTest {
+    val transport = RecordingTmdbTransport(TmdbHttpResponse(200, """{"imdb_id":"tt0133093"}"""))
+    val ids = TmdbMovieCatalog("test-key", transport).externalIds(603)
+
+    assertEquals("tt0133093", ids.imdbId)
+    assertEquals("/3/movie/603/external_ids", transport.request!!.url.encodedPath)
+}
+
+@Test(expected = IOException::class)
+fun `non successful response throws`() = runTest {
+    TmdbMovieCatalog("test-key", RecordingTmdbTransport(TmdbHttpResponse(401, "{}"))).search("Matrix")
+}
 ```
 
-- [ ] **Step 2: Run the new unit test and verify it fails**
-
-Run:
+- [ ] **Step 2: Verify tests fail**
 
 ```bash
 ./gradlew :app:testDebugUnitTest --tests '*TmdbMovieCatalogTest*'
 ```
 
-Expected: FAIL because catalog types/client do not exist.
+Expected: compile/test failure because catalog classes do not exist.
 
-- [ ] **Step 3: Add Coil and BuildConfig wiring**
+- [ ] **Step 3: Add Coil 3.4.0 and BuildConfig key wiring**
 
-In `gradle/libs.versions.toml` add:
+Add to `gradle/libs.versions.toml`:
 
 ```toml
-coil = "3.6.0"
+coil = "3.4.0"
 
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 ```
 
-In `app/build.gradle.kts`, resolve the credential and expose it:
+Add near the top of `app/build.gradle.kts`:
 
 ```kotlin
 val tmdbApiKey = providers.gradleProperty("tmdbApiKey")
     .orElse(providers.environmentVariable("TMDB_API_KEY"))
     .orElse("")
+```
 
-android {
-    defaultConfig {
-        buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey.get()}\"")
-    }
-    buildFeatures {
-        compose = true
-        buildConfig = true
-    }
+Inside `android`:
+
+```kotlin
+defaultConfig {
+    buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey.get()}\"")
+}
+
+buildFeatures {
+    compose = true
+    buildConfig = true
 }
 ```
 
-Add:
+Add dependencies:
 
 ```kotlin
 implementation(libs.coil.compose)
 implementation(libs.coil.network.okhttp)
 ```
 
-Add a release-only validation task so debug/unit CI can compile with a placeholder but release cannot silently ship without a key:
+Add release validation:
 
 ```kotlin
 val verifyTmdbApiKey = tasks.register("verifyTmdbApiKey") {
     doLast {
-        require(tmdbApiKey.get().isNotBlank()) { "TMDB_API_KEY/tmdbApiKey is required for release builds" }
+        require(tmdbApiKey.get().isNotBlank()) {
+            "TMDB_API_KEY or -PtmdbApiKey is required for release builds"
+        }
     }
 }
 
@@ -222,37 +235,39 @@ tasks.matching { it.name == "preReleaseBuild" }.configureEach {
 }
 ```
 
-- [ ] **Step 4: Update CI for this branch and compile-time key**
+- [ ] **Step 4: Update CI**
 
-Add `feature/movie-catalog-search` to push branches and set a harmless build-only value at job level:
+In `.github/workflows/android-ci.yml`, add `feature/movie-catalog-search` to push branches and add at job level:
 
 ```yaml
 env:
   TMDB_API_KEY: ci-placeholder
 ```
 
-No tests may contact the real TMDB service.
+Tests must use fake transports and must not make TMDB network calls.
 
-- [ ] **Step 5: Implement the catalog model and TMDB transport/client**
+- [ ] **Step 5: Implement `TmdbMovieCatalog`**
 
-Use OkHttp exactly like the existing Knaben transport, but GET requests with an `api_key` query parameter. `TmdbMovieCatalog.search()` calls `https://api.themoviedb.org/3/search/movie`; `externalIds()` calls `/3/movie/{id}/external_ids`. Throw `IOException` for non-2xx or malformed top-level JSON.
+Use OkHttp GET requests to:
 
-Use these helpers:
-
-```kotlin
-private fun releaseYear(date: String?): Int? =
-    date?.takeIf { it.length >= 4 }?.take(4)?.toIntOrNull()
-
-fun tmdbPosterUrl(path: String?): String? =
-    path?.let { "https://image.tmdb.org/t/p/w500$it" }
-
-fun tmdbBackdropUrl(path: String?): String? =
-    path?.let { "https://image.tmdb.org/t/p/w1280$it" }
+```text
+https://api.themoviedb.org/3/search/movie
+https://api.themoviedb.org/3/movie/{movie_id}/external_ids
 ```
 
-Do not treat absent overview/rating/images as errors.
+Map `release_date.take(4).toIntOrNull()` to `releaseYear`; map missing/blank optional fields to null; throw `IOException` on non-2xx or malformed top-level JSON.
 
-- [ ] **Step 6: Run catalog tests and full unit suite**
+Add image helpers in the same file:
+
+```kotlin
+fun tmdbPosterUrl(path: String?): String? =
+    path?.takeIf(String::isNotBlank)?.let { "https://image.tmdb.org/t/p/w500$it" }
+
+fun tmdbBackdropUrl(path: String?): String? =
+    path?.takeIf(String::isNotBlank)?.let { "https://image.tmdb.org/t/p/w1280$it" }
+```
+
+- [ ] **Step 6: Run tests**
 
 ```bash
 ./gradlew :app:testDebugUnitTest --tests '*TmdbMovieCatalogTest*'
@@ -270,47 +285,58 @@ git commit -m "feat: add TMDB movie catalog"
 
 ---
 
-### Task 2: Add debounced movie catalog search state
+### Task 2: Debounced catalog search controller
 
 **Files:**
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/MovieSearchUiState.kt`
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/catalog/MovieSearchController.kt`
-- Create: `app/src/test/java/sk/ziacik/androidstreamplayer/catalog/MovieSearchControllerTest.kt`
+- Test: `app/src/test/java/sk/ziacik/androidstreamplayer/catalog/MovieSearchControllerTest.kt`
 
 **Interfaces:**
-- Consumes: `MovieCatalog.search(query)` and `Movie` from Task 1.
-- Produces:
-  ```kotlin
-  data class MovieSearchUiState(
-      val query: String = "",
-      val isSearching: Boolean = false,
-      val results: List<Movie> = emptyList(),
-      val errorMessage: String? = null,
-      val focusedMovieId: Int? = null,
-  )
 
-  class MovieSearchController(
-      private val scope: CoroutineScope,
-      private val catalog: MovieCatalog,
-      private val debounceMs: Long = 400L,
-  ) {
-      val state: StateFlow<MovieSearchUiState>
-      fun setQuery(query: String)
-      fun searchNow()
-      fun retry()
-      fun setFocusedMovie(tmdbId: Int?)
-  }
-  ```
+```kotlin
+data class MovieSearchUiState(
+    val query: String = "",
+    val isSearching: Boolean = false,
+    val results: List<Movie> = emptyList(),
+    val errorMessage: String? = null,
+    val focusedMovieId: Int? = null,
+)
 
-- [ ] **Step 1: Write failing controller tests**
+class MovieSearchController(
+    private val scope: CoroutineScope,
+    private val catalog: MovieCatalog,
+    private val debounceMs: Long = 400L,
+) {
+    val state: StateFlow<MovieSearchUiState>
+    fun setQuery(query: String)
+    fun searchNow()
+    fun retry()
+    fun setFocusedMovie(tmdbId: Int?)
+}
+```
 
-Cover minimum length, debounce, supersession, clear, error, retry, and focus memory:
+- [ ] **Step 1: Write failing behavior tests**
+
+Use a `RecordingMovieCatalog` whose `search` records queries and returns values from a mutable map.
 
 ```kotlin
 @Test
+fun `one character never searches`() = runTest {
+    val catalog = RecordingMovieCatalog()
+    val controller = MovieSearchController(this, catalog, 400)
+
+    controller.setQuery("A")
+    advanceUntilIdle()
+
+    assertTrue(catalog.queries.isEmpty())
+    assertTrue(controller.state.value.results.isEmpty())
+}
+
+@Test
 fun `two characters search after debounce`() = runTest {
     val catalog = RecordingMovieCatalog()
-    val controller = MovieSearchController(this, catalog, debounceMs = 400)
+    val controller = MovieSearchController(this, catalog, 400)
 
     controller.setQuery("Al")
     advanceTimeBy(399)
@@ -322,346 +348,321 @@ fun `two characters search after debounce`() = runTest {
 }
 
 @Test
-fun `one character does not search and clears previous results`() = runTest { /* seed results, then setQuery("A") */ }
+fun `clearing query resets results and error`() = runTest {
+    val movie = Movie(1, null, "Alien", "Alien", 1979, null, null, null, null)
+    val catalog = RecordingMovieCatalog(results = mutableMapOf("Alien" to listOf(movie)))
+    val controller = MovieSearchController(this, catalog, 0)
+
+    controller.setQuery("Alien")
+    advanceUntilIdle()
+    controller.setQuery("")
+    advanceUntilIdle()
+
+    assertEquals("", controller.state.value.query)
+    assertTrue(controller.state.value.results.isEmpty())
+    assertNull(controller.state.value.errorMessage)
+    assertFalse(controller.state.value.isSearching)
+}
 
 @Test
-fun `newer query wins over slower older request`() = runTest { /* delayed fake responses */ }
+fun `failed query exposes error and retry repeats it`() = runTest {
+    val catalog = RecordingMovieCatalog(errorQueries = mutableSetOf("Alien"))
+    val controller = MovieSearchController(this, catalog, 0)
+
+    controller.setQuery("Alien")
+    advanceUntilIdle()
+    assertEquals("Search failed", controller.state.value.errorMessage)
+
+    catalog.errorQueries.clear()
+    controller.retry()
+    advanceUntilIdle()
+
+    assertEquals(listOf("Alien", "Alien"), catalog.queries)
+    assertNull(controller.state.value.errorMessage)
+}
 
 @Test
-fun `clearing query resets landing state`() = runTest { /* assert query/results/error/isSearching */ }
+fun `new query cancels delayed old query`() = runTest {
+    val catalog = DelayedMovieCatalog(
+        delays = mapOf("Al" to 1_000L, "Alien" to 0L),
+        results = mapOf(
+            "Al" to listOf(Movie(1, null, "Old", "Old", null, null, null, null, null)),
+            "Alien" to listOf(Movie(2, null, "Alien", "Alien", 1979, null, null, null, null)),
+        ),
+    )
+    val controller = MovieSearchController(this, catalog, 0)
+
+    controller.setQuery("Al")
+    runCurrent()
+    controller.setQuery("Alien")
+    advanceUntilIdle()
+
+    assertEquals(listOf(2), controller.state.value.results.map(Movie::tmdbId))
+}
 
 @Test
-fun `focused movie id is retained independently from search results`() = runTest {
-    val controller = MovieSearchController(this, RecordingMovieCatalog())
+fun `focused movie id is remembered`() = runTest {
+    val controller = MovieSearchController(this, RecordingMovieCatalog(), 0)
     controller.setFocusedMovie(603)
     assertEquals(603, controller.state.value.focusedMovieId)
 }
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [ ] **Step 2: Verify failure**
 
 ```bash
 ./gradlew :app:testDebugUnitTest --tests '*MovieSearchControllerTest*'
 ```
 
-Expected: FAIL because controller/state are missing.
+- [ ] **Step 3: Implement debounce/cancellation**
 
-- [ ] **Step 3: Implement cancellation-safe debounced search**
+Keep a single `Job?`. `setQuery()` cancels it, writes the typed query, and clears results for fewer than 2 trimmed characters. For valid input launch `delay(debounceMs)` then `performSearch()`. `searchNow()` cancels debounce and searches immediately. `retry()` searches the latest valid trimmed query. Do not clear `focusedMovieId` when navigating to detail/back.
 
-Use one `Job?` for debounce/search. Every `setQuery` cancels the previous job. Trim only for deciding/searching; preserve typed text in state. Use a monotonically increasing request generation or cancellation semantics so a slow old response cannot overwrite a newer query.
-
-Core behavior:
-
-```kotlin
-fun setQuery(query: String) {
-    searchJob?.cancel()
-    _state.value = _state.value.copy(query = query, errorMessage = null)
-    val normalized = query.trim()
-    if (normalized.length < 2) {
-        _state.value = _state.value.copy(isSearching = false, results = emptyList())
-        return
-    }
-    searchJob = scope.launch {
-        delay(debounceMs)
-        performSearch(normalized)
-    }
-}
-```
-
-`searchNow()` cancels the pending debounce and immediately searches if length >= 2. `retry()` reuses the latest normalized query.
-
-- [ ] **Step 4: Run targeted and full unit tests**
+- [ ] **Step 4: Run tests and commit**
 
 ```bash
 ./gradlew :app:testDebugUnitTest --tests '*MovieSearchControllerTest*'
 ./gradlew :app:testDebugUnitTest
-```
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
 git add app/src/main/java/sk/ziacik/androidstreamplayer/catalog/MovieSearchUiState.kt app/src/main/java/sk/ziacik/androidstreamplayer/catalog/MovieSearchController.kt app/src/test/java/sk/ziacik/androidstreamplayer/catalog/MovieSearchControllerTest.kt
 git commit -m "feat: add debounced movie search state"
 ```
 
 ---
 
-### Task 3: Convert Knaben to movie-aware fallback search
+### Task 3: Movie-aware Knaben fallback, dedupe, and sorting
 
 **Files:**
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/search/MovieTorrentSearchRequest.kt`
 - Modify: `app/src/main/java/sk/ziacik/androidstreamplayer/search/TorrentSearchProvider.kt`
 - Modify: `app/src/main/java/sk/ziacik/androidstreamplayer/search/KnabenTorrentSearchProvider.kt`
-- Modify or remove: `app/src/main/java/sk/ziacik/androidstreamplayer/search/FakeTorrentSearchProvider.kt`
+- Modify: `app/src/main/java/sk/ziacik/androidstreamplayer/search/FakeTorrentSearchProvider.kt`
 - Modify: `app/src/test/java/sk/ziacik/androidstreamplayer/search/KnabenTorrentSearchProviderTest.kt`
-- Modify/remove legacy expectations in: `app/src/test/java/sk/ziacik/androidstreamplayer/search/FakeTorrentSearchProviderTest.kt`
+- Modify: `app/src/test/java/sk/ziacik/androidstreamplayer/search/FakeTorrentSearchProviderTest.kt`
 
 **Interfaces:**
-- Produces:
-  ```kotlin
-  data class MovieTorrentSearchRequest(
-      val tmdbId: Int,
-      val imdbId: String?,
-      val title: String,
-      val originalTitle: String,
-      val year: Int?,
-  )
-
-  fun interface TorrentSearchProvider {
-      suspend fun search(movie: MovieTorrentSearchRequest): List<TorrentSearchResult>
-  }
-  ```
-
-- [ ] **Step 1: Replace old Knaben test expectations with movie-aware tests**
-
-Add tests that inspect every recorded request body:
 
 ```kotlin
-@Test
-fun `movie search issues ordered unique fallback queries and movie category only`() = runTest {
-    val transport = QueueTorrentSearchTransport(emptyList(4))
-    val provider = KnabenTorrentSearchProvider(transport)
+data class MovieTorrentSearchRequest(
+    val tmdbId: Int,
+    val imdbId: String?,
+    val title: String,
+    val originalTitle: String,
+    val year: Int?,
+)
 
-    provider.search(
-        MovieTorrentSearchRequest(
-            tmdbId = 603,
-            imdbId = "tt0133093",
-            title = "The Matrix",
-            originalTitle = "The Matrix",
-            year = 1999,
-        ),
-    )
-
-    assertEquals(listOf("The Matrix 1999", "The Matrix"), transport.queries())
-    transport.requests.forEach { request ->
-        val categories = JSONObject(request.bodyUtf8()).getJSONArray("categories")
-        assertEquals(listOf(3_000_000), List(categories.length()) { categories.getInt(it) })
-    }
+fun interface TorrentSearchProvider {
+    suspend fun search(movie: MovieTorrentSearchRequest): List<TorrentSearchResult>
 }
 ```
 
-Add one movie whose translated/original titles differ and assert all four query forms in exact order.
+- [ ] **Step 1: Replace old request test with exact fallback/category tests**
 
-- [ ] **Step 2: Add failing merge/dedupe/sort tests**
-
-Return overlapping magnets from different fallback responses:
+For `title="Matrix"`, `originalTitle="The Matrix"`, `year=1999`, enqueue four empty HTTP responses and assert recorded query bodies equal:
 
 ```kotlin
-@Test
-fun `fallback results merge by btih and sort by seeders descending`() = runTest {
-    // response 1: hash ABC, 20 seeders
-    // response 2: same hash ABC, 40 seeders + hash DEF, 100 seeders
-    // expect DEF first and only one ABC, retaining the healthier duplicate
-}
+listOf("The Matrix 1999", "Matrix 1999", "The Matrix", "Matrix")
 ```
 
-Also cover lowercase/uppercase BTIH normalization and a magnet without usable `xt=urn:btih:` falling back to stable result ID.
+For `title=originalTitle="The Matrix"`, assert only:
 
-- [ ] **Step 3: Run Knaben tests and verify failure**
+```kotlin
+listOf("The Matrix 1999", "The Matrix")
+```
+
+For every request assert categories are exactly `listOf(3_000_000)`, `order_by=seeders`, `order_direction=desc`, `hide_unsafe=true`, and `hide_xxx=true`.
+
+- [ ] **Step 2: Add exact dedupe/sort test**
+
+Queue these hits across two fallback responses:
+
+```text
+A1: magnet btih:ABC, seeders 20
+A2: magnet btih:abc, seeders 40
+D : magnet btih:DEF, seeders 100
+N : magnet without btih, id="no-hash", seeders 5
+```
+
+Assert final IDs are `D`, `A2`, `no-hash` in that order; only one ABC survives.
+
+- [ ] **Step 3: Verify old implementation fails**
 
 ```bash
 ./gradlew :app:testDebugUnitTest --tests '*KnabenTorrentSearchProviderTest*'
 ```
 
-Expected: FAIL because provider still accepts a string and searches movie+TV once.
+- [ ] **Step 4: Implement fallback generator and one-query helper**
 
-- [ ] **Step 4: Implement query generation**
-
-Add a pure helper inside the provider or as an internal function:
+Use:
 
 ```kotlin
 internal fun fallbackQueries(movie: MovieTorrentSearchRequest): List<String> = buildList {
-    fun addQuery(value: String) {
+    fun addUnique(value: String) {
         val normalized = value.trim().replace(Regex("\\s+"), " ")
         if (normalized.isNotBlank() && none { it.equals(normalized, ignoreCase = true) }) add(normalized)
     }
-    movie.year?.let { year -> addQuery("${movie.originalTitle} $year") }
-    movie.year?.let { year -> addQuery("${movie.title} $year") }
-    addQuery(movie.originalTitle)
-    addQuery(movie.title)
+    movie.year?.let { addUnique("${movie.originalTitle} $it") }
+    movie.year?.let { addUnique("${movie.title} $it") }
+    addUnique(movie.originalTitle)
+    addUnique(movie.title)
 }
 ```
 
-- [ ] **Step 5: Split one-query HTTP search from fallback orchestration**
+Move the current HTTP/parsing logic to `private suspend fun searchQuery(query: String)`. Its categories array contains only `MOVIES_CATEGORY`.
 
-Retain existing parsing in a private `searchQuery(query: String)` method. Change categories to movie only. Public `search(movie)` loops through every fallback query, collects results, deduplicates, and sorts.
-
-Use a case-insensitive BTIH key:
+- [ ] **Step 5: Implement dedupe and final ordering**
 
 ```kotlin
-private fun infoHash(magnetUri: String): String? =
-    Regex("(?i)(?:[?&]xt=urn:btih:)([A-Za-z0-9]+)")
-        .find(magnetUri)
+private fun infoHash(magnet: String): String? =
+    Regex("(?i)[?&]xt=urn:btih:([A-Za-z0-9]+)")
+        .find(magnet)
         ?.groupValues
         ?.get(1)
         ?.lowercase()
 ```
 
-When duplicates share a hash, keep the item with the higher `seeders ?: -1`.
-
-Final ordering:
+Key by `"hash:$hash"` when present, otherwise `"id:${result.id}"`. If a duplicate key exists, retain the result with the larger `seeders ?: -1`. Sort with:
 
 ```kotlin
-.sortedWith(compareByDescending<TorrentSearchResult> { it.seeders ?: -1 }.thenBy { it.title })
+compareByDescending<TorrentSearchResult> { it.seeders ?: -1 }
+    .thenBy { it.title }
 ```
 
-- [ ] **Step 6: Update fake provider to the new contract**
+- [ ] **Step 6: Adapt fake provider to the new interface**
 
-If instrumentation tests still benefit from `FakeTorrentSearchProvider`, make it accept `MovieTorrentSearchRequest` and derive fake release names from `movie.title`. Otherwise delete it and use inline fakes in tests.
+`FakeTorrentSearchProvider.search(movie)` returns the same fake quality options as today but uses `movie.title` as the release prefix. Update its unit test to call the provider with a `MovieTorrentSearchRequest`.
 
-- [ ] **Step 7: Run search tests and full unit suite**
+- [ ] **Step 7: Run tests and commit**
+
+Temporarily adapt old `SearchControllerTest.RecordingProvider` to accept `MovieTorrentSearchRequest` solely so the suite compiles; Task 4 deletes that legacy controller/test.
 
 ```bash
-./gradlew :app:testDebugUnitTest --tests '*KnabenTorrentSearchProviderTest*'
+./gradlew :app:testDebugUnitTest --tests '*KnabenTorrentSearchProviderTest*' --tests '*FakeTorrentSearchProviderTest*'
 ./gradlew :app:testDebugUnitTest
-```
-
-At this point legacy `SearchControllerTest` may fail to compile because its provider contract is obsolete. Do not patch the old controller deeply; Task 4 replaces its responsibilities. If compilation blocks Task 3, minimally adapt the legacy test/provider call sites to `MovieTorrentSearchRequest` without changing behavior, then remove them in Task 4.
-
-- [ ] **Step 8: Commit**
-
-```bash
 git add app/src/main/java/sk/ziacik/androidstreamplayer/search app/src/test/java/sk/ziacik/androidstreamplayer/search
 git commit -m "feat: search Knaben by movie identity"
 ```
 
 ---
 
-### Task 4: Split torrent discovery from playback preparation
+### Task 4: Split torrent discovery and playback controllers
 
 **Files:**
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/search/TorrentSearchUiState.kt`
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/search/TorrentSearchController.kt`
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/playback/PlaybackUiState.kt`
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/playback/PlaybackController.kt`
-- Create: `app/src/test/java/sk/ziacik/androidstreamplayer/search/TorrentSearchControllerTest.kt`
-- Create: `app/src/test/java/sk/ziacik/androidstreamplayer/playback/PlaybackControllerTest.kt`
-- Remove after tests migrate: `app/src/main/java/sk/ziacik/androidstreamplayer/search/SearchController.kt`
-- Remove after tests migrate: `app/src/main/java/sk/ziacik/androidstreamplayer/search/SearchUiState.kt`
-- Remove after tests migrate: `app/src/test/java/sk/ziacik/androidstreamplayer/search/SearchControllerTest.kt`
+- Test: `app/src/test/java/sk/ziacik/androidstreamplayer/search/TorrentSearchControllerTest.kt`
+- Test: `app/src/test/java/sk/ziacik/androidstreamplayer/playback/PlaybackControllerTest.kt`
+- Delete: `app/src/main/java/sk/ziacik/androidstreamplayer/search/SearchController.kt`
+- Delete: `app/src/main/java/sk/ziacik/androidstreamplayer/search/SearchUiState.kt`
+- Delete: `app/src/test/java/sk/ziacik/androidstreamplayer/search/SearchControllerTest.kt`
 
 **Interfaces:**
-- Consumes: `MovieCatalog.externalIds`, `TorrentSearchProvider.search(movieRequest)`, existing `TorrentStreamer`.
-- Produces:
-  ```kotlin
-  data class TorrentSearchUiState(
-      val movie: Movie? = null,
-      val isSearching: Boolean = false,
-      val results: List<TorrentSearchResult> = emptyList(),
-      val errorMessage: String? = null,
-  )
-
-  class TorrentSearchController(...) {
-      val state: StateFlow<TorrentSearchUiState>
-      fun open(movie: Movie)
-      fun retry()
-      fun clear()
-  }
-
-  data class PlaybackUiState(
-      val selectedResult: TorrentSearchResult? = null,
-      val status: String? = null,
-  )
-
-  class PlaybackController(...) {
-      val state: StateFlow<PlaybackUiState>
-      fun play(result: TorrentSearchResult)
-      fun playMagnet(magnet: String)
-      fun exit()
-  }
-  ```
-
-- [ ] **Step 1: Write failing torrent controller tests**
 
 ```kotlin
-@Test
-fun `opening movie resolves imdb id then searches torrents`() = runTest {
-    val catalog = FakeMovieCatalog(externalIds = MovieExternalIds("tt0133093"))
-    val provider = RecordingTorrentProvider(results = listOf(result))
-    val controller = TorrentSearchController(this, catalog, provider)
+data class TorrentSearchUiState(
+    val movie: Movie? = null,
+    val isSearching: Boolean = false,
+    val results: List<TorrentSearchResult> = emptyList(),
+    val errorMessage: String? = null,
+)
 
-    controller.open(matrixMovie)
-    advanceUntilIdle()
-
-    assertEquals("tt0133093", provider.requests.single().imdbId)
-    assertEquals(listOf(result), controller.state.value.results)
+class TorrentSearchController(
+    private val scope: CoroutineScope,
+    private val catalog: MovieCatalog,
+    private val provider: TorrentSearchProvider,
+) {
+    val state: StateFlow<TorrentSearchUiState>
+    fun open(movie: Movie)
+    fun retry()
+    fun clear()
 }
 
-@Test
-fun `external id failure still searches by title and year`() = runTest {
-    val catalog = FakeMovieCatalog(externalIdsError = IOException("boom"))
-    val provider = RecordingTorrentProvider()
-    val controller = TorrentSearchController(this, catalog, provider)
+data class PlaybackUiState(
+    val selectedResult: TorrentSearchResult? = null,
+    val status: String? = null,
+)
 
-    controller.open(matrixMovie)
-    advanceUntilIdle()
-
-    assertEquals(null, provider.requests.single().imdbId)
-    assertNull(controller.state.value.errorMessage)
+class PlaybackController(
+    private val scope: CoroutineScope,
+    private val streamer: TorrentStreamer?,
+    private val onStreamReady: (TorrentSource) -> Unit = {},
+) {
+    val state: StateFlow<PlaybackUiState>
+    fun play(result: TorrentSearchResult)
+    fun playMagnet(magnet: String)
+    fun exit()
 }
-
-@Test
-fun `torrent provider failure exposes retryable error`() = runTest { /* then retry() repeats same movie */ }
 ```
 
-- [ ] **Step 2: Write failing playback controller tests by moving existing behavior**
+- [ ] **Step 1: Write torrent controller tests**
 
-Port the useful assertions from `SearchControllerTest`:
+Exact cases:
+
+1. `externalIds(603)` returns `tt0133093` → provider receives request with that ID.
+2. external-ID lookup throws `IOException` → provider still called once with `imdbId=null`, no UI error if provider succeeds.
+3. provider throws → state ends with `isSearching=false`, empty results, `errorMessage="Search failed"`.
+4. after provider failure, clear the fake failure and call `retry()` → same movie searched again and results published.
+5. call `open(movieA)` with delayed provider then `open(movieB)` → final state belongs only to B.
+
+- [ ] **Step 2: Write playback controller tests by moving existing assertions**
+
+Exact cases:
 
 ```kotlin
 @Test
-fun `play prepares torrent and reports playing`() = runTest { /* existing streamer/source assertion */ }
+fun `play prepares selected torrent and reports playing`() = runTest {
+    val selected = result("Alien.2160p")
+    val source = TorrentSource("torrent://stream/Alien.mkv")
+    var prepared: TorrentSearchResult? = null
+    var opened: TorrentSource? = null
+    val controller = PlaybackController(
+        this,
+        TorrentStreamer { prepared = it; source },
+        onStreamReady = { opened = it },
+    )
+
+    controller.play(selected)
+    assertEquals("Preparing stream…", controller.state.value.status)
+    advanceUntilIdle()
+
+    assertEquals(selected, prepared)
+    assertEquals(source, opened)
+    assertEquals("Playing", controller.state.value.status)
+}
 
 @Test
-fun `stream preparation failure reports stream failed`() = runTest { /* existing failure assertion */ }
-
-@Test
-fun `play magnet creates direct torrent result without search provider`() = runTest {
-    val controller = PlaybackController(this, streamer, onStreamReady)
+fun `play magnet creates direct result`() = runTest {
+    val controller = PlaybackController(this, TorrentStreamer { TorrentSource("torrent://stream") })
     controller.playMagnet("magnet:?xt=urn:btih:0123456789abcdef")
     advanceUntilIdle()
+
+    assertEquals("direct-magnet", controller.state.value.selectedResult!!.id)
     assertEquals("Magnet", controller.state.value.selectedResult!!.source)
 }
-
-@Test
-fun `exit clears transient playback state`() = runTest { /* selected/status null */ }
 ```
 
-- [ ] **Step 3: Run targeted tests and verify failure**
+Also assert streamer failure → `Stream failed`, null streamer → `Streaming unavailable`, callback failure → `Playback failed`, and `exit()` clears result/status.
+
+- [ ] **Step 3: Verify tests fail**
 
 ```bash
 ./gradlew :app:testDebugUnitTest --tests '*TorrentSearchControllerTest*' --tests '*PlaybackControllerTest*'
 ```
 
-Expected: FAIL because new controllers are missing.
-
 - [ ] **Step 4: Implement `TorrentSearchController`**
 
-`open(movie)` sets loading immediately, then tries external IDs with `runCatching`. Build `MovieTorrentSearchRequest` with the resolved IMDb ID when available. External-ID failure is swallowed for lookup purposes; provider failure becomes `errorMessage = "Search failed"`. `retry()` repeats the same `movie`.
-
-When `open()` is called for a different movie, cancel the previous job so stale results cannot appear on the new detail.
+`open(movie)` cancels the previous job, publishes loading with the selected movie, then resolves external IDs using `runCatching`. Search with `movie.copy(imdbId = resolvedId)` converted to `MovieTorrentSearchRequest`. External-ID failure does not set an error. Provider failure sets `Search failed`. `retry()` calls `open(state.value.movie!!)`. `clear()` cancels work and resets state.
 
 - [ ] **Step 5: Implement `PlaybackController`**
 
-Move the existing preparation logic verbatim in behavior:
+Move preparation behavior from legacy `SearchController.select()`. Keep current status strings exactly. `playMagnet()` creates the direct result and delegates to `play()`.
 
-```text
-play(result)
-  -> selectedResult=result, status="Preparing stream…"
-  -> streamer.prepare(result)
-  -> onStreamReady(source)
-  -> status="Playing"
-```
+- [ ] **Step 6: Delete legacy combined controller and run suite**
 
-Preserve current failure strings (`Streaming unavailable`, `Playback failed`, `Stream failed`) so `KinoPlayerScreen` integration does not regress.
+Delete `SearchController.kt`, `SearchUiState.kt`, and `SearchControllerTest.kt`. At this intermediate commit, production `SearchScreen.kt` will no longer compile; therefore in the same step replace its controller parameter with a temporary compile-only wrapper is forbidden. Instead defer deleting production `SearchController.kt` until Task 7, but delete the old unit test now. Keep a comment in the plan only—not production code—that Task 7 performs final deletion.
 
-`playMagnet()` constructs a `TorrentSearchResult(id="direct-magnet", title="Magnet torrent", source="Magnet", magnetUri=magnet)` and calls `play()`.
-
-- [ ] **Step 6: Remove legacy combined controller/state and run unit suite**
-
-Delete `SearchController.kt`, `SearchUiState.kt`, and old `SearchControllerTest.kt` once all callers have migrated or temporarily stubbed in preparation for Tasks 5–7.
+Run tests with the legacy production controller still present:
 
 ```bash
 ./gradlew :app:testDebugUnitTest
@@ -678,35 +679,34 @@ git commit -m "refactor: split torrent search from playback"
 
 ---
 
-### Task 5: Build the Netflix-style movie poster search screen
+### Task 5: Netflix-style poster search UI
 
 **Files:**
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/ui/MoviePosterCard.kt`
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/ui/MovieSearchScreen.kt`
-- Create: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/MovieSearchScreenTest.kt`
+- Test: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/MovieSearchScreenTest.kt`
 
-**Interfaces:**
-- Consumes: `MovieSearchController`, `Movie`, `tmdbPosterUrl()`.
-- Produces:
-  ```kotlin
-  @Composable
-  fun MovieSearchScreen(
-      controller: MovieSearchController,
-      onMovieSelected: (Movie) -> Unit,
-      modifier: Modifier = Modifier,
-  )
-  ```
+**Interface:**
 
-- [ ] **Step 1: Write the failing Compose UI behavior test**
+```kotlin
+@Composable
+fun MovieSearchScreen(
+    controller: MovieSearchController,
+    onMovieSelected: (Movie) -> Unit,
+    modifier: Modifier = Modifier,
+)
+```
 
-Use a fake `MovieCatalog` and `MovieSearchController(debounceMs = 0)`:
+- [ ] **Step 1: Write failing poster search UI test**
+
+Use a fake `MovieCatalog` returning Matrix and `MovieSearchController(debounceMs=0)`:
 
 ```kotlin
 @Test
-fun movieSearchShowsPosterResultsAndSelection() {
+fun movieSearchShowsAndSelectsPoster() {
     var selected: Movie? = null
     composeRule.setContent {
-        MovieSearchScreen(controller = controller, onMovieSelected = { selected = it })
+        MovieSearchScreen(controller, onMovieSelected = { selected = it })
     }
 
     composeRule.onNodeWithTag("movie-search-field").performTextInput("Matrix")
@@ -719,226 +719,165 @@ fun movieSearchShowsPosterResultsAndSelection() {
 }
 ```
 
-Add a test for empty/error copy and semantics tags rather than pixel styling.
+Add a second test where fake catalog returns empty list; assert `No movies found`. Add a third where fake catalog throws; assert `Couldn’t search movies` and a `Retry` node.
 
-- [ ] **Step 2: Run instrumentation compile/test target and verify failure**
+- [ ] **Step 2: Verify instrumentation compilation fails**
 
 ```bash
 ./gradlew :app:assembleAndroidTest
 ```
 
-Expected: compilation FAIL because screen/card do not exist.
-
 - [ ] **Step 3: Implement `MoviePosterCard`**
 
-Use Coil `AsyncImage` with poster URL, 2:3 aspect ratio, rounded corners, `ContentScale.Crop`, and a deterministic focus animation around 1.05×. The card must have `Modifier.testTag("movie-${movie.tmdbId}")`.
+Use `Card` + Coil `AsyncImage`, 2:3 aspect ratio, `ContentScale.Crop`, 18–20dp rounding. On focus animate scale to `1.05f`, show a strong secondary-color border, and reveal title + year. Add `testTag("movie-${movie.tmdbId}")`. When `posterPath` is null, render a dark placeholder with movie title centered.
 
-When focused, show title/year immediately below the poster or in a compact overlay; unfocused posters should remain visually clean. Missing poster uses a styled placeholder containing the movie title rather than a broken image icon.
+The composable accepts `FocusRequester?`, `onFocus`, and `upFocusRequester?` so `MovieSearchScreen` controls navigation without embedding global state in the card.
 
-- [ ] **Step 4: Implement `MovieSearchScreen`**
+- [ ] **Step 4: Implement `MovieSearchScreen` grid and focus restoration**
 
-Landing state keeps the current Kino cinematic background/brand language. Results state collapses the hero so posters dominate.
+Use `LazyVerticalGrid(GridCells.Fixed(6))` for 1080p TV layout, a `LazyGridState`, and a search `FocusRequester`.
 
-Use a `LazyVerticalGrid` with fixed 5 or 6 columns appropriate for 1080p TV spacing. Search field stays at the top, starts focused on launch, and has `testTag("movie-search-field")`.
+When results exist:
 
-Implement deterministic focus requesters:
+```kotlin
+val focusedIndex = state.focusedMovieId?.let { id -> state.results.indexOfFirst { it.tmdbId == id } }
+LaunchedEffect(state.results, state.focusedMovieId) {
+    if (focusedIndex != null && focusedIndex >= 0) {
+        gridState.scrollToItem(focusedIndex)
+        posterRequesters.getValue(state.results[focusedIndex].tmdbId).requestFocus()
+    }
+}
+```
 
-- keep a `FocusRequester` for search;
-- keep a `FocusRequester` for the first visible/result item when results arrive;
-- set `focusProperties { down = firstResultRequester }` on search when results exist;
-- first-row poster cards use `focusProperties { up = searchRequester }`;
-- each card calls `controller.setFocusedMovie(movie.tmdbId)` on focus.
+If no remembered focus exists, Down from the search field targets the first poster. Every first-row poster has `focusProperties { up = searchRequester }`. Every focused card calls `controller.setFocusedMovie(movie.tmdbId)`.
 
-On recomposition/back-navigation, request focus for the card whose ID equals `state.focusedMovieId` after the grid is populated.
+Initial launch requests search focus only when `focusedMovieId == null`; this prevents Back from detail from stealing focus away from the restored poster.
 
-- [ ] **Step 5: Add catalog loading/error/empty states without replacing the screen**
+- [ ] **Step 5: Implement compact states**
 
-Loading is a compact line/spinner under search. Error exposes a Retry action calling `controller.retry()`. Empty results display `No movies found` while keeping the search field and background visible.
+Keep the Kino cinematic background. Before results show the larger hero. Once results exist collapse header height and let posters dominate. Loading/error/empty content appears below the search input; never replace the whole screen.
 
-- [ ] **Step 6: Compile instrumentation and run unit suite**
+- [ ] **Step 6: Compile/test and commit**
 
 ```bash
 ./gradlew :app:assembleAndroidTest :app:testDebugUnitTest
-```
-
-Expected: PASS compile/unit. Run the instrumentation test on an emulator/device when available:
-
-```bash
-./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=sk.ziacik.androidstreamplayer.ui.MovieSearchScreenTest
-```
-
-- [ ] **Step 7: Commit**
-
-```bash
 git add app/src/main/java/sk/ziacik/androidstreamplayer/ui/MoviePosterCard.kt app/src/main/java/sk/ziacik/androidstreamplayer/ui/MovieSearchScreen.kt app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/MovieSearchScreenTest.kt
 git commit -m "feat: add TV movie poster search"
 ```
 
 ---
 
-### Task 6: Build cinematic movie detail with torrent results
+### Task 6: Cinematic detail and torrent result UI
 
 **Files:**
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/ui/TorrentResults.kt`
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/ui/MovieDetailScreen.kt`
-- Create: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/MovieDetailScreenTest.kt`
+- Test: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/MovieDetailScreenTest.kt`
 
-**Interfaces:**
-- Consumes: `Movie`, `TorrentSearchController`, `PlaybackController`, `tmdbPosterUrl`, `tmdbBackdropUrl`.
-- Produces:
-  ```kotlin
-  @Composable
-  fun MovieDetailScreen(
-      movie: Movie,
-      torrentController: TorrentSearchController,
-      onPlay: (TorrentSearchResult) -> Unit,
-      onBack: () -> Unit,
-      modifier: Modifier = Modifier,
-  )
-  ```
-
-- [ ] **Step 1: Write failing detail UI test**
+**Interface:**
 
 ```kotlin
-@Test
-fun detailShowsMovieAndSelectableTorrent() {
-    var selected: TorrentSearchResult? = null
-    composeRule.setContent {
-        MovieDetailScreen(
-            movie = matrixMovie,
-            torrentController = controllerWithResults,
-            onPlay = { selected = it },
-            onBack = {},
-        )
-    }
-
-    composeRule.onNodeWithText("The Matrix").assertIsDisplayed()
-    composeRule.onNodeWithText("1999").assertIsDisplayed()
-    composeRule.onNodeWithTag("torrent-hit-1").performClick()
-    assertEquals("hit-1", selected?.id)
-}
+@Composable
+fun MovieDetailScreen(
+    movie: Movie,
+    torrentController: TorrentSearchController,
+    onPlay: (TorrentSearchResult) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+)
 ```
 
-Add tests for inline loading, no versions, and retry button.
+- [ ] **Step 1: Write detail UI tests**
 
-- [ ] **Step 2: Run instrumentation compile and verify failure**
+Create a controller with fake catalog/provider and assert these exact states in separate tests:
+
+1. title `The Matrix`, year `1999`, overview text visible.
+2. while provider is suspended, `Finding versions…` visible while title remains visible.
+3. empty provider result → `No versions found`.
+4. provider exception → `Couldn’t find versions` and `Retry` visible.
+5. result `hit-1` → node tag `torrent-hit-1`; clicking it invokes `onPlay` with ID `hit-1`.
+
+- [ ] **Step 2: Verify instrumentation compilation fails**
 
 ```bash
 ./gradlew :app:assembleAndroidTest
 ```
 
-Expected: compilation FAIL because detail components do not exist.
-
 - [ ] **Step 3: Implement `TorrentResults`**
 
-Extract the useful release-card styling from current `SearchScreen` but make rows denser. Each row shows:
+Rows show quality badge, full release title, `N seeds`, and formatted GiB. Reuse the existing result-card focus animation but remove `Great/Good/Limited availability`. Add `testTag("torrent-${result.id}")`.
 
-```text
-[2160p] Release.Title...              184 seeds   17.5 GB
-```
-
-Use real seed count (`"$seeders seeds"`), not `Great availability`. Preserve quality badge. Focused row gets a strong border/scale and `PLAY` accent. Tag rows `torrent-${result.id}`.
-
-Use a `FocusRequester` on the first result and request it once when the result list changes from empty to non-empty.
+Keep a first-result `FocusRequester`; `LaunchedEffect(results.map { it.id })` requests it only when the non-empty ID list changes. This prevents repeated focus steals during unrelated recompositions.
 
 - [ ] **Step 4: Implement `MovieDetailScreen`**
 
-On first composition for `movie.tmdbId`, call:
+Use `LaunchedEffect(movie.tmdbId) { torrentController.open(movie) }`. Render backdrop via `tmdbBackdropUrl()` behind dark gradients; render poster, title, year, rating, overview, then torrent section. Add `BackHandler(onBack = onBack)`.
 
-```kotlin
-LaunchedEffect(movie.tmdbId) {
-    torrentController.open(movie)
-}
-```
+The detail metadata must remain visible for loading, error, empty, and result states.
 
-Render backdrop with `AsyncImage` and a dark horizontal/vertical readability gradient. Poster on leading side; title, year, rating, overview beside it. The release section stays visible in the same screen and reflects `TorrentSearchUiState`.
-
-Use explicit back handling (`BackHandler(onBack = onBack)`) so Back never accidentally exits the Activity while on detail.
-
-- [ ] **Step 5: Keep detail visible through all torrent states**
-
-`isSearching` → compact `Finding versions…` indicator in release area.
-
-`errorMessage != null` → `Couldn’t find versions` + Retry.
-
-`results.isEmpty()` after completed search → `No versions found`.
-
-Results → focusable `LazyColumn` rows.
-
-- [ ] **Step 6: Compile/run tests**
+- [ ] **Step 5: Compile/test and commit**
 
 ```bash
 ./gradlew :app:assembleAndroidTest :app:testDebugUnitTest
-```
-
-When a device/emulator is available:
-
-```bash
-./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=sk.ziacik.androidstreamplayer.ui.MovieDetailScreenTest
-```
-
-- [ ] **Step 7: Commit**
-
-```bash
 git add app/src/main/java/sk/ziacik/androidstreamplayer/ui/TorrentResults.kt app/src/main/java/sk/ziacik/androidstreamplayer/ui/MovieDetailScreen.kt app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/MovieDetailScreenTest.kt
 git commit -m "feat: add cinematic movie detail"
 ```
 
 ---
 
-### Task 7: Wire Catalog → Detail → Player in `KinoApp` and `MainActivity`
+### Task 7: Wire Catalog → Detail → Player and remove old screen
 
 **Files:**
 - Create: `app/src/main/java/sk/ziacik/androidstreamplayer/ui/KinoApp.kt`
 - Modify: `app/src/main/java/sk/ziacik/androidstreamplayer/MainActivity.kt`
-- Remove: `app/src/main/java/sk/ziacik/androidstreamplayer/ui/SearchScreen.kt`
-- Remove: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/SearchScreenTest.kt`
-- Create: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/KinoAppFlowTest.kt`
+- Delete: `app/src/main/java/sk/ziacik/androidstreamplayer/ui/SearchScreen.kt`
+- Delete: `app/src/main/java/sk/ziacik/androidstreamplayer/search/SearchController.kt`
+- Delete: `app/src/main/java/sk/ziacik/androidstreamplayer/search/SearchUiState.kt`
+- Delete: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/SearchScreenTest.kt`
+- Test: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/KinoAppFlowTest.kt`
 
-**Interfaces:**
-- Consumes: `MovieSearchController`, `TorrentSearchController`, `PlaybackController`, existing `KinoPlayerScreen` and `Player`.
-- Produces:
-  ```kotlin
-  @Composable
-  fun KinoApp(
-      movieSearchController: MovieSearchController,
-      torrentSearchController: TorrentSearchController,
-      playbackController: PlaybackController,
-      player: Player,
-      modifier: Modifier = Modifier,
-  )
-  ```
+**Interface:**
 
-- [ ] **Step 1: Write the failing end-to-end Compose flow test with fakes**
-
-Test the state transitions without network/TorrServer:
-
-```text
-enter Matrix
-→ movie-603 appears
-→ select movie-603
-→ detail title appears
-→ torrent-hit-1 appears
-→ select torrent-hit-1
-→ playback status transitions
-→ Back/exit returns to detail
-→ Back returns to catalog
-→ movie-603 is present and stored focusedMovieId remains 603
+```kotlin
+@Composable
+fun KinoApp(
+    movieSearchController: MovieSearchController,
+    torrentSearchController: TorrentSearchController,
+    playbackController: PlaybackController,
+    player: Player,
+    modifier: Modifier = Modifier,
+)
 ```
 
-Use fake catalog/provider/streamer and a fake or nullable player seam if needed. If `KinoPlayerScreen` requires a real `Player`, test the app coordinator with playback state up to the Player branch and retain existing `KinoPlayerOverlayTest` for player rendering.
+- [ ] **Step 1: Write end-to-end Compose flow test using fakes and a real empty ExoPlayer**
 
-- [ ] **Step 2: Run instrumentation compile and verify failure**
+In the test create `ExoPlayer.Builder(context).build()` and release it in `@After`. Fake catalog returns Matrix; fake torrent provider returns `hit-1`; fake streamer returns `TorrentSource("torrent://test")`; playback callback does nothing so state still becomes `Playing`.
+
+Exercise:
+
+```text
+input Matrix
+→ click movie-603
+→ assert The Matrix detail
+→ click torrent-hit-1
+→ assert Kino player root/test tag from existing player UI
+→ invoke player exit/back callback through UI Back behavior
+→ assert The Matrix detail again
+→ press Back
+→ assert movie-603 exists and controller.focusedMovieId == 603
+```
+
+If existing `KinoPlayerScreen` lacks a stable root tag, add `testTag("kino-player")` to its outer root only; do not alter its navigation behavior.
+
+- [ ] **Step 2: Verify compilation fails before wiring**
 
 ```bash
 ./gradlew :app:assembleAndroidTest
 ```
 
-Expected: FAIL because `KinoApp` does not exist.
+- [ ] **Step 3: Implement `KinoApp`**
 
-- [ ] **Step 3: Implement `KinoApp` linear coordinator**
-
-Keep only the selected movie as top-level navigation state:
+Keep `selectedMovie` in `remember` and observe playback state:
 
 ```kotlin
 var selectedMovie by remember { mutableStateOf<Movie?>(null) }
@@ -966,20 +905,17 @@ when {
 }
 ```
 
-When playback exits, `selectedMovie` stays intact, so the user returns to the same detail. When detail backs out, `MovieSearchController` still owns query/results/focused movie, so catalog context is restored.
-
-Also render the existing preparation/error state over detail while `PlaybackController.status` is non-null but not `Playing`, so selecting a torrent still shows `Preparing stream…` feedback.
+When playback status is `Preparing stream…` or an error, keep `MovieDetailScreen` visible and overlay/use an inline status surface driven by `PlaybackUiState`. Do not replace detail with a blank screen.
 
 - [ ] **Step 4: Rewire `MainActivity`**
 
-Construct:
+Construct once in `onCreate`:
 
 ```kotlin
-val movieCatalog = TmdbMovieCatalog(apiKey = BuildConfig.TMDB_API_KEY)
-val movieSearchController = MovieSearchController(appScope, movieCatalog)
-val torrentProvider = KnabenTorrentSearchProvider()
-val torrentSearchController = TorrentSearchController(appScope, movieCatalog, torrentProvider)
-val playbackController = PlaybackController(
+val movieCatalog = TmdbMovieCatalog(BuildConfig.TMDB_API_KEY)
+movieSearchController = MovieSearchController(appScope, movieCatalog)
+torrentSearchController = TorrentSearchController(appScope, movieCatalog, KnabenTorrentSearchProvider())
+playbackController = PlaybackController(
     scope = appScope,
     streamer = torrentStreamer,
     onStreamReady = { source ->
@@ -989,29 +925,19 @@ val playbackController = PlaybackController(
 )
 ```
 
-Pass those to `KinoApp`.
+Render `KinoApp`. Preserve fullscreen flags, player pause/release, TorrServer startup/shutdown, and `EXTRA_MAGNET` handling. Replace `startMagnet()` body with `playbackController.playMagnet(magnet)`.
 
-Preserve current lifecycle behavior (`pause` on stop, release on destroy, TorrServer shutdown).
+- [ ] **Step 5: Delete the old combined flow**
 
-Replace old magnet routing with:
+Delete `SearchScreen.kt`, `SearchController.kt`, `SearchUiState.kt`, and old `SearchScreenTest.kt`.
 
-```kotlin
-private fun startMagnet(magnet: String) {
-    playbackController.playMagnet(magnet)
-}
-```
-
-Do not route magnets through the movie catalog.
-
-- [ ] **Step 5: Delete old torrent-first UI**
-
-Remove `SearchScreen.kt` and its instrumentation test. Confirm no production references to `SearchController`, `SearchUiState`, or old free-text torrent search remain:
+Verify no old production API remains:
 
 ```bash
 ! grep -R "SearchController\|SearchUiState\|provider.search(query" app/src/main app/src/test app/src/androidTest
 ```
 
-- [ ] **Step 6: Compile all debug/test artifacts**
+- [ ] **Step 6: Build all debug artifacts**
 
 ```bash
 TMDB_API_KEY=ci-placeholder ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleAndroidTest --stacktrace
@@ -1022,59 +948,52 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add app/src/main/java/sk/ziacik/androidstreamplayer/MainActivity.kt app/src/main/java/sk/ziacik/androidstreamplayer/ui app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui
+git add app/src/main/java/sk/ziacik/androidstreamplayer app/src/androidTest/java/sk/ziacik/androidstreamplayer
 git commit -m "feat: wire movie catalog to Kino player"
 ```
 
 ---
 
-### Task 8: Hardening, TV navigation verification, and final branch validation
+### Task 8: TV focus hardening and final branch validation
 
 **Files:**
-- Modify as needed: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/MovieSearchScreenTest.kt`
-- Modify as needed: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/MovieDetailScreenTest.kt`
-- Modify as needed: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/KinoAppFlowTest.kt`
-- Modify as needed: `app/src/main/java/sk/ziacik/androidstreamplayer/ui/MovieSearchScreen.kt`
-- Modify as needed: `app/src/main/java/sk/ziacik/androidstreamplayer/ui/MovieDetailScreen.kt`
-- Modify as needed: `app/src/main/java/sk/ziacik/androidstreamplayer/ui/TorrentResults.kt`
+- Modify: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/MovieSearchScreenTest.kt`
+- Modify: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/MovieDetailScreenTest.kt`
+- Modify: `app/src/androidTest/java/sk/ziacik/androidstreamplayer/ui/KinoAppFlowTest.kt`
+- Modify: `app/src/main/java/sk/ziacik/androidstreamplayer/ui/MovieSearchScreen.kt`
+- Modify: `app/src/main/java/sk/ziacik/androidstreamplayer/ui/TorrentResults.kt`
 
-**Interfaces:**
-- Consumes all completed feature boundaries.
-- Produces a branch ready for review/PR.
+- [ ] **Step 1: Add explicit TV focus tests**
 
-- [ ] **Step 1: Add/finish D-pad focus assertions**
-
-Where Compose test APIs are reliable, use key input/focus assertions to verify:
+Use `performKeyInput`/focus assertions supported by the Compose version to verify:
 
 ```text
-initial focus = movie-search-field
-search results loaded
-Down from search = first movie
-Up from first row = search
-select movie
-first torrent receives focus when results load
-Back from detail = selected movie focus restored
+movie-search-field initially focused
+Down after results → movie-603 focused
+Up from movie-603 → movie-search-field focused
+open detail and wait for results → torrent-hit-1 focused
+Back detail → movie-603 focused again
 ```
 
-If the test framework cannot reliably synthesize TV key events for one transition, keep a unit-testable pure focus/navigation helper rather than dropping the behavior. Do not rely only on manual testing.
+Add `assertIsFocused()` calls after each transition. If direct key synthesis fails on the test runtime, extract a small pure `MovieGridFocusPolicy` with `firstRow(index, columns=6)` and unit-test the row decision while keeping one instrumentation assertion for actual restored poster focus.
 
-- [ ] **Step 2: Verify no TV content leaks into movie-only Knaben requests**
+- [ ] **Step 2: Verify movie-only provider invariants**
 
 ```bash
-grep -R "TV_CATEGORY\|2_000_000" app/src/main/java/sk/ziacik/androidstreamplayer/search && exit 1 || true
+if grep -R "TV_CATEGORY\|2_000_000" app/src/main/java/sk/ziacik/androidstreamplayer/search; then exit 1; fi
 ```
 
-Expected: no production TV category in the movie provider.
+Expected: no match.
 
-- [ ] **Step 3: Verify no real TMDB credential is committed**
+- [ ] **Step 3: Verify credential safety**
 
 ```bash
-git grep -nE 'TMDB_API_KEY\s*[=:]\s*[A-Za-z0-9_-]{20,}|api_key=[A-Za-z0-9_-]{20,}' -- . ':!docs/superpowers/plans/*'
+git grep -nE 'api_key=[A-Za-z0-9_-]{20,}|TMDB_API_KEY[[:space:]]*=[[:space:]]*[A-Za-z0-9_-]{20,}' -- . ':!docs/superpowers/plans/*'
 ```
 
-Expected: no credential literal; only property/env/BuildConfig wiring.
+Expected: no real credential literal.
 
-- [ ] **Step 4: Run full unit and compile validation**
+- [ ] **Step 4: Run full automated build validation**
 
 ```bash
 TMDB_API_KEY=ci-placeholder ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleAndroidTest --stacktrace
@@ -1082,69 +1001,57 @@ TMDB_API_KEY=ci-placeholder ./gradlew :app:testDebugUnitTest :app:assembleDebug 
 
 Expected: PASS.
 
-- [ ] **Step 5: Run instrumentation tests on Android TV/emulator when available**
+- [ ] **Step 5: Run connected Android TV instrumentation tests**
 
 ```bash
 TMDB_API_KEY=ci-placeholder ./gradlew :app:connectedDebugAndroidTest --stacktrace
 ```
 
-Expected: existing player overlay tests plus new catalog/detail/flow tests PASS.
+Expected: existing Kino player tests plus new catalog/detail/app-flow tests PASS.
 
-- [ ] **Step 6: Smoke-test with a real TMDB key on a TV device**
-
-Build/deploy using a non-committed key:
+- [ ] **Step 6: Smoke-test with a real non-committed TMDB key**
 
 ```bash
 ./gradlew :app:assembleDebug -PtmdbApiKey="$TMDB_API_KEY"
 ./deploy-debug
 ```
 
-Verify manually with `The Matrix` or `Alien`:
+On TV verify `The Matrix` and `Alien`: correct posters, predictable D-pad grid, cinematic detail, automatic Knaben releases, real seeder/size/quality metadata, playback, then Back Player → Detail → same poster/query.
 
-1. posters appear from TMDB;
-2. D-pad grid navigation is predictable;
-3. detail shows correct backdrop/title/year/overview;
-4. Knaben returns movie releases automatically;
-5. release rows show real seed count/size/quality;
-6. selected release reaches the existing player;
-7. Back returns player → detail → same poster/search context.
-
-- [ ] **Step 7: Compare branch against master and inspect scope**
+- [ ] **Step 7: Inspect diff scope**
 
 ```bash
 git diff --stat master...HEAD
 git diff master...HEAD -- app/src/main/java app/src/test app/src/androidTest app/build.gradle.kts gradle/libs.versions.toml .github/workflows/android-ci.yml
 ```
 
-Confirm there are no unrelated player/TorrServer/theme rewrites.
+Reject unrelated TorrServer/player/theme rewrites.
 
-- [ ] **Step 8: Commit any hardening fixes**
+- [ ] **Step 8: Commit focus/test hardening changes**
 
 ```bash
-git add app/src .github/workflows/android-ci.yml app/build.gradle.kts gradle/libs.versions.toml
-git commit -m "test: harden movie catalog TV flow"
+git add app/src
+git diff --cached --quiet || git commit -m "test: harden movie catalog TV flow"
 ```
-
-If there are no changes after validation, skip the commit.
 
 ---
 
 ## Final Acceptance Checklist
 
-- [ ] Fresh launch shows Kino movie search, not raw torrent search.
-- [ ] Query length < 2 does not call TMDB.
-- [ ] Search is debounced ~400 ms and stale requests cannot overwrite newer ones.
-- [ ] TMDB posters are cached/loaded through Coil and missing images degrade gracefully.
-- [ ] Movie detail retains TMDB ID and resolves IMDb ID without blocking title fallback.
-- [ ] Knaben uses movie-only category and all four defined fallback forms when distinct.
-- [ ] Torrent results merge, deduplicate by info-hash, and sort by seeders descending.
-- [ ] Detail remains visible while torrent discovery loads/fails/returns empty.
-- [ ] Real seeder counts are shown.
-- [ ] Selecting a release uses existing TorrServer → Media3 playback.
-- [ ] External magnet intent still works without going through TMDB.
-- [ ] Back from player returns to detail; Back from detail returns to same catalog query/result/focus.
+- [ ] Fresh launch shows movie catalog search, not raw torrent rows.
+- [ ] Fewer than 2 trimmed characters never call TMDB.
+- [ ] Search debounces ~400 ms and old requests cannot overwrite new results.
+- [ ] Posters/backdrops load through Coil and missing images are graceful.
+- [ ] TMDB ID is retained; IMDb lookup failure does not prevent torrent fallback.
+- [ ] Knaben runs every distinct fallback in the specified order using movie-only category.
+- [ ] Torrent results merge, dedupe by info-hash, keep the healthier duplicate, and sort by seeders descending.
+- [ ] Detail remains visible through torrent loading/error/empty states.
+- [ ] Release rows show real seeder counts, size, and quality.
+- [ ] Existing TorrServer → Media3 playback still works.
+- [ ] External magnet intent bypasses TMDB and still plays.
+- [ ] Back Player → Detail → same catalog query/results/scroll/focus.
 - [ ] Unit tests pass.
-- [ ] Debug APK and instrumentation APK compile.
-- [ ] Connected instrumentation tests pass when a TV/emulator is available.
+- [ ] Debug and instrumentation APKs compile.
+- [ ] Connected TV instrumentation tests pass.
 - [ ] No real TMDB credential is committed.
-- [ ] `master` remains untouched until deliberate merge/review.
+- [ ] `master` remains untouched until deliberate merge.
