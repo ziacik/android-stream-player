@@ -75,6 +75,11 @@ fun KinoApp(
 					resumePositionMs = entry.positionMs
 					playbackController.play(entry.result)
 				},
+				onCancelResumeWatching = {
+					playbackController.exit()
+					playbackMovie = null
+					resumePositionMs = null
+				},
 				onRemoveResumeWatching = watchProgressRepository::remove,
 				startingResumeMovieId = startingResumeMovieId,
 			)
