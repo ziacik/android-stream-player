@@ -80,6 +80,7 @@ fun MovieSearchScreen(
 	modifier: Modifier = Modifier,
 	resumeWatching: List<WatchProgressEntry> = emptyList(),
 	onResumeWatching: (WatchProgressEntry) -> Unit = {},
+	onCancelResumeWatching: () -> Unit = {},
 	onRemoveResumeWatching: (Int) -> Unit = {},
 	startingResumeMovieId: Int? = null,
 ) {
@@ -101,6 +102,9 @@ fun MovieSearchScreen(
 
 	BackHandler(enabled = resumeActionEntry != null) {
 		resumeActionEntry = null
+	}
+	BackHandler(enabled = resumeActionEntry == null && startingResumeMovieId != null) {
+		onCancelResumeWatching()
 	}
 
 	LaunchedEffect(state.results, state.focusedMovieId) {
@@ -228,6 +232,7 @@ fun MovieSearchScreen(
 								focusRequesters = resumeRequesters,
 								upFocusRequester = searchRequester,
 								onResume = onResumeWatching,
+								onCancelStarting = onCancelResumeWatching,
 								onOpenActions = { resumeActionEntry = it },
 								startingMovieId = startingResumeMovieId,
 							)
@@ -258,6 +263,7 @@ private fun ResumeWatchingRow(
 	focusRequesters: Map<Int, FocusRequester>,
 	upFocusRequester: FocusRequester,
 	onResume: (WatchProgressEntry) -> Unit,
+	onCancelStarting: () -> Unit,
 	onOpenActions: (WatchProgressEntry) -> Unit,
 	startingMovieId: Int?,
 ) {
@@ -281,6 +287,7 @@ private fun ResumeWatchingRow(
 					focusRequester = focusRequesters.getValue(entry.movie.tmdbId),
 					upFocusRequester = upFocusRequester,
 					onResume = { onResume(entry) },
+					onCancelStarting = onCancelStarting,
 					onOpenActions = { onOpenActions(entry) },
 					isStarting = startingMovieId == entry.movie.tmdbId,
 				)
@@ -295,6 +302,7 @@ private fun ResumeWatchingCard(
 	focusRequester: FocusRequester,
 	upFocusRequester: FocusRequester,
 	onResume: () -> Unit,
+	onCancelStarting: () -> Unit,
 	onOpenActions: () -> Unit,
 	isStarting: Boolean,
 ) {
@@ -312,8 +320,12 @@ private fun ResumeWatchingCard(
 	val shape = RoundedCornerShape(12.dp)
 
 	Card(
-		onClick = onResume,
-		enabled = !isStarting,
+		onClick = {
+			when (resumeWatchingActivation(isStarting)) {
+				ResumeWatchingActivation.Resume -> onResume()
+				ResumeWatchingActivation.Cancel -> onCancelStarting()
+			}
+		},
 		modifier = Modifier
 			.width(154.dp)
 			.testTag("resume-watching-${entry.movie.tmdbId}")
@@ -321,34 +333,40 @@ private fun ResumeWatchingCard(
 			.focusProperties { up = upFocusRequester }
 			.onFocusChanged { focused = it.isFocused }
 			.semantics {
-				onLongClick(label = "Show options") {
-					onOpenActions()
-					true
-				}
-			}
-			.onPreviewKeyEvent { event ->
-				val isConfirm = event.key == Key.DirectionCenter ||
-					event.key == Key.Enter ||
-					event.key == Key.NumPadEnter
-				when (
-					resumeWatchingKeyAction(
-						isConfirm = isConfirm,
-						isDown = event.type == KeyEventType.KeyDown,
-						isUp = event.type == KeyEventType.KeyUp,
-						repeatCount = event.nativeKeyEvent.repeatCount,
-						longPressTriggered = longPressTriggered,
-					)
-				) {
-					ResumeWatchingKeyAction.OpenActions -> {
-						longPressTriggered = true
+				if (resumeWatchingOptionsEnabled(isStarting)) {
+					onLongClick(label = "Show options") {
 						onOpenActions()
 						true
 					}
-					ResumeWatchingKeyAction.Consume -> {
-						if (event.type == KeyEventType.KeyUp) longPressTriggered = false
-						true
+				}
+			}
+			.onPreviewKeyEvent { event ->
+				if (!resumeWatchingOptionsEnabled(isStarting)) {
+					false
+				} else {
+					val isConfirm = event.key == Key.DirectionCenter ||
+						event.key == Key.Enter ||
+						event.key == Key.NumPadEnter
+					when (
+						resumeWatchingKeyAction(
+							isConfirm = isConfirm,
+							isDown = event.type == KeyEventType.KeyDown,
+							isUp = event.type == KeyEventType.KeyUp,
+							repeatCount = event.nativeKeyEvent.repeatCount,
+							longPressTriggered = longPressTriggered,
+						)
+					) {
+						ResumeWatchingKeyAction.OpenActions -> {
+							longPressTriggered = true
+							onOpenActions()
+							true
+						}
+						ResumeWatchingKeyAction.Consume -> {
+							if (event.type == KeyEventType.KeyUp) longPressTriggered = false
+							true
+						}
+						ResumeWatchingKeyAction.PassThrough -> false
 					}
-					ResumeWatchingKeyAction.PassThrough -> false
 				}
 			}
 			.graphicsLayer {
@@ -426,7 +444,7 @@ private fun ResumeWatchingCard(
 				)
 				Text(
 					text = when {
-						isStarting -> "Starting…"
+						isStarting -> "Starting… · OK to cancel"
 						focused -> "Hold OK for options"
 						else -> "${(progress * 100).toInt()}% watched"
 					},
