@@ -1,7 +1,9 @@
 package sk.ziacik.androidstreamplayer.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ResumeWatchingLogicTest {
@@ -17,6 +19,33 @@ class ResumeWatchingLogicTest {
 				longPressTriggered = false,
 			),
 		)
+	}
+
+	@Test
+	fun resumeActionsConsumeOriginalLongPressUntilItsKeyUp() {
+		val repeatedDown = resumeActionsKeyDecision(
+			isConfirm = true,
+			isUp = false,
+			waitingForRelease = true,
+		)
+		assertTrue(repeatedDown.consume)
+		assertTrue(repeatedDown.waitingForRelease)
+
+		val release = resumeActionsKeyDecision(
+			isConfirm = true,
+			isUp = true,
+			waitingForRelease = repeatedDown.waitingForRelease,
+		)
+		assertTrue(release.consume)
+		assertFalse(release.waitingForRelease)
+
+		val nextPress = resumeActionsKeyDecision(
+			isConfirm = true,
+			isUp = false,
+			waitingForRelease = release.waitingForRelease,
+		)
+		assertFalse(nextPress.consume)
+		assertFalse(nextPress.waitingForRelease)
 	}
 
 	@Test
