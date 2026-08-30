@@ -132,7 +132,7 @@ private class DelayedWatchProgressStorage(
 		pendingEntries = entries
 	}
 
-	fun saveDurably(entries: List<WatchProgressEntry>) {
+	override fun saveDurably(entries: List<WatchProgressEntry>) {
 		pendingEntries = entries
 		durableEntries = entries
 	}
