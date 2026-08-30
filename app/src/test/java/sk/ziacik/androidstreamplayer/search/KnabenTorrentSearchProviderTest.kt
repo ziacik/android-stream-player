@@ -12,7 +12,7 @@ import org.junit.Test
 
 class KnabenTorrentSearchProviderTest {
 	@Test
-	fun `legacy text search delegates to a safe movie query sorted by seeders`() = runTest {
+	fun `movie search sends a safe request sorted by seeders`() = runTest {
 		val transport = RecordingTorrentSearchTransport(
 			response = TorrentSearchHttpResponse(
 				code = 200,
@@ -21,7 +21,7 @@ class KnabenTorrentSearchProviderTest {
 		)
 		val provider = KnabenTorrentSearchProvider(transport = transport)
 
-		provider.search("Dune")
+		provider.search(movieRequest("Dune"))
 
 		val request = assertNotNull(transport.request).let { transport.request!! }
 		assertEquals("POST", request.method)
@@ -40,7 +40,7 @@ class KnabenTorrentSearchProviderTest {
 	}
 
 	@Test
-	fun `text search maps Knaben hits to torrent results and infers quality`() = runTest {
+	fun `movie search maps Knaben hits to torrent results and infers quality`() = runTest {
 		val transport = RecordingTorrentSearchTransport(
 			response = TorrentSearchHttpResponse(
 				code = 200,
@@ -62,7 +62,7 @@ class KnabenTorrentSearchProviderTest {
 		)
 		val provider = KnabenTorrentSearchProvider(transport = transport)
 
-		val results = provider.search("Dune Part Two")
+		val results = provider.search(movieRequest("Dune Part Two"))
 
 		assertEquals(1, results.size)
 		assertEquals(
@@ -199,6 +199,14 @@ class KnabenTorrentSearchProviderTest {
 		assertEquals(listOf("def", "abc-better", "no-hash"), results.map { it.id })
 		assertEquals(listOf(100, 40, 5), results.map { it.seeders })
 	}
+
+	private fun movieRequest(title: String) = MovieTorrentSearchRequest(
+		tmdbId = 0,
+		imdbId = null,
+		title = title,
+		originalTitle = title,
+		year = null,
+	)
 
 	private class RecordingTorrentSearchTransport(
 		private val response: TorrentSearchHttpResponse,
