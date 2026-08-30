@@ -26,6 +26,10 @@ fun KinoApp(
 	var resumePositionMs by remember { mutableStateOf<Long?>(null) }
 	val playbackState by playbackController.state.collectAsState()
 	val resumeWatching by watchProgressRepository.entries.collectAsState()
+	val startingResumeMovieId = startingResumeMovieId(
+		playbackStatus = playbackState.status,
+		playbackMovieId = playbackMovie?.tmdbId,
+	)
 
 	when {
 		playbackState.status == "Playing" -> {
@@ -72,6 +76,7 @@ fun KinoApp(
 					playbackController.play(entry.result)
 				},
 				onRemoveResumeWatching = watchProgressRepository::remove,
+				startingResumeMovieId = startingResumeMovieId,
 			)
 		}
 	}
