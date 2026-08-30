@@ -244,7 +244,18 @@ fun KinoPlayerScreen(
                         val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1
 
                         if (!overlayVisible) {
-                            if (isUp) {
+                            if (isDown && event.nativeKeyEvent.repeatCount > 0) {
+                                val action = kinoHorizontalAction(
+                                    overlayVisible = false,
+                                    focus = focusedFocus,
+                                    direction = direction,
+                                    repeatCount = event.nativeKeyEvent.repeatCount,
+                                )
+                                if (action is KinoPlayerAction.StartScrub) {
+                                    focusedFocus = KinoPlayerFocus.PROGRESS
+                                    advanceScrub(action.deltaMs)
+                                }
+                            } else if (isUp) {
                                 val action = kinoHorizontalAction(
                                     overlayVisible = false,
                                     focus = focusedFocus,
