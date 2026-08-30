@@ -35,6 +35,7 @@ import coil3.compose.AsyncImage
 import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.catalog.tmdbBackdropUrl
 import sk.ziacik.androidstreamplayer.catalog.tmdbPosterUrl
+import sk.ziacik.androidstreamplayer.playback.PlaybackUiState
 import sk.ziacik.androidstreamplayer.search.TorrentSearchController
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 
@@ -42,6 +43,7 @@ import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 fun MovieDetailScreen(
 	movie: Movie,
 	torrentController: TorrentSearchController,
+	playbackState: PlaybackUiState,
 	onPlay: (TorrentSearchResult) -> Unit,
 	onBack: () -> Unit,
 	modifier: Modifier = Modifier,
@@ -135,6 +137,8 @@ fun MovieDetailScreen(
 
 				TorrentResults(
 					state = torrentState,
+					startingResultId = playbackState.startingResultId,
+					startupErrorMessage = playbackState.startupErrorMessage,
 					onPlay = onPlay,
 					onRetry = torrentController::retry,
 					modifier = Modifier
