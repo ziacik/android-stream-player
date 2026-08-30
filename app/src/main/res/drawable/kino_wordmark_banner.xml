@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="300dp"
+    android:height="100dp"
+    android:viewportWidth="300"
+    android:viewportHeight="100">
+
+    <path
+        android:fillColor="@color/kino_burgundy_deep"
+        android:strokeColor="@color/kino_champagne"
+        android:strokeWidth="2"
+        android:pathData="M22,16 H62 C70,16 76,22 76,30 V70 C76,78 70,84 62,84 H22 C14,84 8,78 8,70 V30 C8,22 14,16 22,16 Z" />
+
+    <path
+        android:fillColor="@color/kino_champagne"
+        android:fillAlpha="0.14"
+        android:pathData="M47,45 L70,34 L70,67 L47,57 Z" />
+    <path
+        android:fillColor="@color/kino_champagne"
+        android:pathData="M27,29 H38 V71 H27 Z" />
+    <path
+        android:fillColor="@color/kino_champagne_soft"
+        android:pathData="M37,49 L54,29 H66 L46,53 Z" />
+    <path
+        android:fillColor="@color/kino_champagne"
+        android:pathData="M45,54 L66,71 H53 L37,59 Z" />
+    <path
+        android:fillColor="@color/kino_burgundy"
+        android:pathData="M38,46 L50,53 L38,61 Z" />
+
+    <path
+        android:fillColor="@color/kino_champagne_soft"
+        android:pathData="M96,27 H107 V48 L123,27 H137 L116,52 L138,74 H123 L107,58 V74 H96 Z" />
+
+    <path
+        android:fillColor="@color/kino_champagne"
+        android:pathData="M147,39 H157 V74 H147 Z" />
+    <path
+        android:fillColor="@color/kino_champagne_soft"
+        android:pathData="M152,25 A6,6 0,1 1,151.9,25 Z" />
+
+    <path
+        android:fillColor="@color/kino_champagne"
+        android:pathData="M168,39 H178 V44 C182,40 187,38 193,38 C204,38 210,45 210,57 V74 H200 V58 C200,51 197,47 191,47 C183,47 178,52 178,60 V74 H168 Z" />
+
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="@color/kino_champagne_soft"
+        android:strokeWidth="10"
+        android:strokeLineCap="round"
+        android:pathData="M242,44 A15,15 0,1 1,241.9,44" />
+</vector>
