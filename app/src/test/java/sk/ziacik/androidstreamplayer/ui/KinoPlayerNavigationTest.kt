@@ -1,7 +1,7 @@
 package sk.ziacik.androidstreamplayer.ui
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
+import org.junit.Assert.assertEquals
+import org.junit.Test
 
 class KinoPlayerNavigationTest {
     @Test
