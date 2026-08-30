@@ -18,7 +18,19 @@ internal data class ResumeActionsKeyDecision(
 	val waitingForRelease: Boolean,
 )
 
+internal data class ResumeActionFocusStyle(
+	val scale: Float,
+	val borderWidthDp: Int,
+)
+
 internal fun resumeWatchingRemoveLabel(): String = "Remove from $RESUME_WATCHING_LABEL"
+
+internal fun resumeActionFocusStyle(focused: Boolean): ResumeActionFocusStyle =
+	if (focused) {
+		ResumeActionFocusStyle(scale = 1.05f, borderWidthDp = 3)
+	} else {
+		ResumeActionFocusStyle(scale = 1f, borderWidthDp = 0)
+	}
 
 internal fun resumeWatchingKeyAction(
 	isConfirm: Boolean,
