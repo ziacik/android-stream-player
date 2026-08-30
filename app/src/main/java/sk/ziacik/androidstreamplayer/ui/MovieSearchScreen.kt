@@ -1,5 +1,6 @@
 package sk.ziacik.androidstreamplayer.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -24,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,6 +59,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -90,6 +95,11 @@ fun MovieSearchScreen(
 	val firstResumeRequester = resumeWatching.firstOrNull()?.let { resumeRequesters[it.movie.tmdbId] }
 	val firstPosterRequester = state.results.firstOrNull()?.let { posterRequesters[it.tmdbId] }
 	var initialFocusHandled by remember { mutableStateOf(false) }
+	var resumeActionEntry by remember { mutableStateOf<WatchProgressEntry?>(null) }
+
+	BackHandler(enabled = resumeActionEntry != null) {
+		resumeActionEntry = null
+	}
 
 	LaunchedEffect(state.results, state.focusedMovieId) {
 		if (initialFocusHandled) return@LaunchedEffect
@@ -216,13 +226,24 @@ fun MovieSearchScreen(
 								focusRequesters = resumeRequesters,
 								upFocusRequester = searchRequester,
 								onResume = onResumeWatching,
-								onRemove = onRemoveResumeWatching,
+								onOpenActions = { resumeActionEntry = it },
 							)
 							Spacer(Modifier.height(20.dp))
 						}
 						MovieSearchLanding()
 					}
 				}
+			}
+
+			resumeActionEntry?.let { entry ->
+				ResumeWatchingActions(
+					entry = entry,
+					onRemove = {
+						onRemoveResumeWatching(entry.movie.tmdbId)
+						resumeActionEntry = null
+					},
+					onCancel = { resumeActionEntry = null },
+				)
 			}
 		}
 	}
@@ -234,7 +255,7 @@ private fun ResumeWatchingRow(
 	focusRequesters: Map<Int, FocusRequester>,
 	upFocusRequester: FocusRequester,
 	onResume: (WatchProgressEntry) -> Unit,
-	onRemove: (Int) -> Unit,
+	onOpenActions: (WatchProgressEntry) -> Unit,
 ) {
 	Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 		Text(
@@ -256,7 +277,7 @@ private fun ResumeWatchingRow(
 					focusRequester = focusRequesters.getValue(entry.movie.tmdbId),
 					upFocusRequester = upFocusRequester,
 					onResume = { onResume(entry) },
-					onRemove = { onRemove(entry.movie.tmdbId) },
+					onOpenActions = { onOpenActions(entry) },
 				)
 			}
 		}
@@ -269,10 +290,10 @@ private fun ResumeWatchingCard(
 	focusRequester: FocusRequester,
 	upFocusRequester: FocusRequester,
 	onResume: () -> Unit,
-	onRemove: () -> Unit,
+	onOpenActions: () -> Unit,
 ) {
 	var focused by remember { mutableStateOf(false) }
-	var removeTriggered by remember { mutableStateOf(false) }
+	var longPressTriggered by remember { mutableStateOf(false) }
 	val scale by animateFloatAsState(
 		targetValue = if (focused) 1.04f else 1f,
 		label = "resume-watching-scale",
@@ -292,23 +313,35 @@ private fun ResumeWatchingCard(
 			.focusRequester(focusRequester)
 			.focusProperties { up = upFocusRequester }
 			.onFocusChanged { focused = it.isFocused }
+			.semantics {
+				onLongClick(label = "Show options") {
+					onOpenActions()
+					true
+				}
+			}
 			.onPreviewKeyEvent { event ->
 				val isConfirm = event.key == Key.DirectionCenter ||
 					event.key == Key.Enter ||
 					event.key == Key.NumPadEnter
-				when {
-					isConfirm && event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount > 0 -> {
-						if (!removeTriggered) {
-							removeTriggered = true
-							onRemove()
-						}
+				when (
+					resumeWatchingKeyAction(
+						isConfirm = isConfirm,
+						isDown = event.type == KeyEventType.KeyDown,
+						isUp = event.type == KeyEventType.KeyUp,
+						repeatCount = event.nativeKeyEvent.repeatCount,
+						longPressTriggered = longPressTriggered,
+					)
+				) {
+					ResumeWatchingKeyAction.OpenActions -> {
+						longPressTriggered = true
+						onOpenActions()
 						true
 					}
-					isConfirm && event.type == KeyEventType.KeyUp && removeTriggered -> {
-						removeTriggered = false
+					ResumeWatchingKeyAction.Consume -> {
+						if (event.type == KeyEventType.KeyUp) longPressTriggered = false
 						true
 					}
-					else -> false
+					ResumeWatchingKeyAction.PassThrough -> false
 				}
 			}
 			.graphicsLayer {
@@ -370,11 +403,75 @@ private fun ResumeWatchingCard(
 					overflow = TextOverflow.Ellipsis,
 				)
 				Text(
-					text = if (focused) "Hold OK to remove" else "${(progress * 100).toInt()}% watched",
+					text = if (focused) "Hold OK for options" else "${(progress * 100).toInt()}% watched",
 					style = MaterialTheme.typography.labelSmall,
 					color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.68f),
 					maxLines = 1,
 				)
+			}
+		}
+	}
+}
+
+@Composable
+private fun ResumeWatchingActions(
+	entry: WatchProgressEntry,
+	onRemove: () -> Unit,
+	onCancel: () -> Unit,
+) {
+	val cancelRequester = remember { FocusRequester() }
+
+	LaunchedEffect(entry.movie.tmdbId) {
+		cancelRequester.requestFocus()
+	}
+
+	Box(
+		modifier = Modifier
+			.fillMaxSize()
+			.background(Color.Black.copy(alpha = 0.76f))
+			.testTag("resume-watching-actions"),
+		contentAlignment = Alignment.Center,
+	) {
+		Surface(
+			modifier = Modifier.width(430.dp),
+			shape = RoundedCornerShape(20.dp),
+			color = MaterialTheme.colorScheme.surface,
+			shadowElevation = 18.dp,
+		) {
+			Column(
+				modifier = Modifier.padding(24.dp),
+				verticalArrangement = Arrangement.spacedBy(12.dp),
+			) {
+				Text(
+					text = entry.movie.title,
+					style = MaterialTheme.typography.titleLarge,
+					fontWeight = FontWeight.SemiBold,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+				)
+				Text(
+					text = "Resume Watching options",
+					style = MaterialTheme.typography.bodyMedium,
+					color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+				)
+				Spacer(Modifier.height(4.dp))
+				Button(
+					onClick = onRemove,
+					modifier = Modifier
+						.fillMaxWidth()
+						.testTag("resume-watching-remove"),
+				) {
+					Text("Remove from Continue Watching")
+				}
+				TextButton(
+					onClick = onCancel,
+					modifier = Modifier
+						.fillMaxWidth()
+						.focusRequester(cancelRequester)
+						.testTag("resume-watching-cancel"),
+				) {
+					Text("Cancel")
+				}
 			}
 		}
 	}
