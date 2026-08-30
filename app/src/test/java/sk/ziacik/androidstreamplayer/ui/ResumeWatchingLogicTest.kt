@@ -70,4 +70,10 @@ class ResumeWatchingLogicTest {
 		assertEquals("Resume Watching", RESUME_WATCHING_LABEL)
 		assertEquals("Remove from Resume Watching", resumeWatchingRemoveLabel())
 	}
+
+	@Test
+	fun focusedDialogActionHasStrongVisualEmphasis() {
+		assertEquals(ResumeActionFocusStyle(scale = 1f, borderWidthDp = 0), resumeActionFocusStyle(false))
+		assertEquals(ResumeActionFocusStyle(scale = 1.05f, borderWidthDp = 3), resumeActionFocusStyle(true))
+	}
 }
