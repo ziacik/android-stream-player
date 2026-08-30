@@ -19,6 +19,12 @@ class SharedPreferencesWatchProgressStorage(context: Context) : WatchProgressSto
 			.apply()
 	}
 
+	override fun saveDurably(entries: List<WatchProgressEntry>) {
+		preferences.edit()
+			.putString(KEY_ENTRIES, WatchProgressJson.encode(entries))
+			.commit()
+	}
+
 	private companion object {
 		const val PREFERENCES_NAME = "watch_progress"
 		const val KEY_ENTRIES = "entries"
