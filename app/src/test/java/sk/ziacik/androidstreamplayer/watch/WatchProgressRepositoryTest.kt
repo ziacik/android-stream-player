@@ -47,6 +47,33 @@ class WatchProgressRepositoryTest {
 		assertEquals(3_000L, repository.entries.value.first().positionMs)
 	}
 
+	@Test
+	fun `record removes movie once playback reaches ninety five percent`() {
+		val storage = FakeWatchProgressStorage()
+		val repository = WatchProgressRepository(storage)
+		val movie = movie(603, "The Matrix")
+		val result = result("matrix")
+
+		repository.record(movie, result, 5_000L, 10_000L)
+		repository.record(movie, result, 9_500L, 10_000L)
+
+		assertEquals(emptyList<WatchProgressEntry>(), repository.entries.value)
+		assertEquals(emptyList<WatchProgressEntry>(), storage.saved)
+	}
+
+	@Test
+	fun `remove deletes movie from resume list`() {
+		val storage = FakeWatchProgressStorage()
+		val repository = WatchProgressRepository(storage)
+		repository.record(movie(603, "The Matrix"), result("matrix"), 5_000L, 10_000L)
+		repository.record(movie(438631, "Dune"), result("dune"), 4_000L, 10_000L)
+
+		repository.remove(603)
+
+		assertEquals(listOf(438631), repository.entries.value.map { it.movie.tmdbId })
+		assertEquals(repository.entries.value, storage.saved)
+	}
+
 	private fun movie(id: Int, title: String) = Movie(
 		tmdbId = id,
 		title = title,
