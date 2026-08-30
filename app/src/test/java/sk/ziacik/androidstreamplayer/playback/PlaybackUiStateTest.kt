@@ -10,7 +10,7 @@ class PlaybackUiStateTest {
 	fun `preparing state exposes the starting torrent id`() {
 		val state = PlaybackUiState(
 			selectedResult = result("first"),
-			status = "Preparing stream...",
+			status = "Preparing stream…",
 		)
 
 		assertEquals("first", state.startingResultId)
