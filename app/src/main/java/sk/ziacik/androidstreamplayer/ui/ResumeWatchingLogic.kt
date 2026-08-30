@@ -18,3 +18,8 @@ internal fun resumeWatchingKeyAction(
 	isConfirm && isUp && longPressTriggered -> ResumeWatchingKeyAction.Consume
 	else -> ResumeWatchingKeyAction.PassThrough
 }
+
+internal fun startingResumeMovieId(
+	playbackStatus: String,
+	playbackMovieId: Int?,
+): Int? = playbackMovieId?.takeIf { playbackStatus == "Preparing stream…" }
