@@ -121,6 +121,29 @@ class SearchControllerTest {
     }
 
     @Test
+    fun `exiting playback returns to existing search results`() = runTest {
+        val selected = result("Alien.2160p", "2160p")
+        val controller = SearchController(
+            scope = this,
+            provider = RecordingProvider(results = listOf(selected)),
+            streamer = TorrentStreamer { TorrentSource("torrent://stream/Alien.mkv") },
+        )
+
+        controller.setQuery("Alien")
+        controller.search()
+        advanceUntilIdle()
+        controller.select(selected)
+        advanceUntilIdle()
+
+        controller.exitPlayback()
+
+        assertEquals("Alien", controller.state.value.query)
+        assertEquals(listOf(selected), controller.state.value.results)
+        assertNull(controller.state.value.selectedResult)
+        assertNull(controller.state.value.streamStatus)
+    }
+
+    @Test
     fun `stream preparation failure becomes stream error`() = runTest {
         val selected = result("Alien.2160p", "2160p")
         val controller = SearchController(
