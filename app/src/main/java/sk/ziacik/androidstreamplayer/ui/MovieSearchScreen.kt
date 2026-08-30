@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -269,7 +270,7 @@ private fun ResumeWatchingRow(
 ) {
 	Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 		Text(
-			text = "Resume Watching",
+			text = RESUME_WATCHING_LABEL,
 			style = MaterialTheme.typography.titleLarge,
 			fontWeight = FontWeight.SemiBold,
 			color = MaterialTheme.colorScheme.onBackground,
@@ -465,6 +466,11 @@ private fun ResumeWatchingActions(
 ) {
 	val cancelRequester = remember { FocusRequester() }
 	var waitingForConfirmRelease by remember(entry.movie.tmdbId) { mutableStateOf(true) }
+	var removeFocused by remember { mutableStateOf(false) }
+	var cancelFocused by remember { mutableStateOf(false) }
+	val removeFocusStyle = resumeActionFocusStyle(removeFocused)
+	val cancelFocusStyle = resumeActionFocusStyle(cancelFocused)
+	val buttonShape = RoundedCornerShape(12.dp)
 
 	LaunchedEffect(entry.movie.tmdbId) {
 		cancelRequester.requestFocus()
@@ -507,7 +513,7 @@ private fun ResumeWatchingActions(
 					overflow = TextOverflow.Ellipsis,
 				)
 				Text(
-					text = "Resume Watching options",
+					text = "$RESUME_WATCHING_LABEL options",
 					style = MaterialTheme.typography.bodyMedium,
 					color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
 				)
@@ -516,16 +522,38 @@ private fun ResumeWatchingActions(
 					onClick = onRemove,
 					modifier = Modifier
 						.fillMaxWidth()
+						.graphicsLayer {
+							scaleX = removeFocusStyle.scale
+							scaleY = removeFocusStyle.scale
+						}
+						.border(
+							width = removeFocusStyle.borderWidthDp.dp,
+							color = if (removeFocused) MaterialTheme.colorScheme.secondary else Color.Transparent,
+							shape = buttonShape,
+						)
+						.onFocusChanged { removeFocused = it.isFocused }
 						.testTag("resume-watching-remove"),
+					shape = buttonShape,
 				) {
-					Text("Remove from Continue Watching")
+					Text(resumeWatchingRemoveLabel())
 				}
 				TextButton(
 					onClick = onCancel,
 					modifier = Modifier
 						.fillMaxWidth()
+						.graphicsLayer {
+							scaleX = cancelFocusStyle.scale
+							scaleY = cancelFocusStyle.scale
+						}
+						.border(
+							width = cancelFocusStyle.borderWidthDp.dp,
+							color = if (cancelFocused) MaterialTheme.colorScheme.secondary else Color.Transparent,
+							shape = buttonShape,
+						)
+						.onFocusChanged { cancelFocused = it.isFocused }
 						.focusRequester(cancelRequester)
 						.testTag("resume-watching-cancel"),
+					shape = buttonShape,
 				) {
 					Text("Cancel")
 				}
