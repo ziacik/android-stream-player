@@ -446,6 +446,7 @@ private fun ResumeWatchingActions(
 	onCancel: () -> Unit,
 ) {
 	val cancelRequester = remember { FocusRequester() }
+	var waitingForConfirmRelease by remember(entry.movie.tmdbId) { mutableStateOf(true) }
 
 	LaunchedEffect(entry.movie.tmdbId) {
 		cancelRequester.requestFocus()
@@ -455,7 +456,19 @@ private fun ResumeWatchingActions(
 		modifier = Modifier
 			.fillMaxSize()
 			.background(Color.Black.copy(alpha = 0.76f))
-			.testTag("resume-watching-actions"),
+			.testTag("resume-watching-actions")
+			.onPreviewKeyEvent { event ->
+				val isConfirm = event.key == Key.DirectionCenter ||
+					event.key == Key.Enter ||
+					event.key == Key.NumPadEnter
+				val decision = resumeActionsKeyDecision(
+					isConfirm = isConfirm,
+					isUp = event.type == KeyEventType.KeyUp,
+					waitingForRelease = waitingForConfirmRelease,
+				)
+				waitingForConfirmRelease = decision.waitingForRelease
+				decision.consume
+			},
 		contentAlignment = Alignment.Center,
 	) {
 		Surface(
