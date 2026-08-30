@@ -6,7 +6,11 @@ on:
       - master
       - feature/foundation
       - feature/torrent-playback-proof
+      - feature/movie-catalog-search
   pull_request:
+
+env:
+  TMDB_API_KEY: ci-placeholder
 
 jobs:
   build:
