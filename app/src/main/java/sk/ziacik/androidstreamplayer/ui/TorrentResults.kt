@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -42,6 +43,8 @@ import sk.ziacik.androidstreamplayer.search.TorrentSearchUiState
 @Composable
 fun TorrentResults(
 	state: TorrentSearchUiState,
+	startingResultId: String?,
+	startupErrorMessage: String?,
 	onPlay: (TorrentSearchResult) -> Unit,
 	onRetry: () -> Unit,
 	modifier: Modifier = Modifier,
@@ -55,6 +58,21 @@ fun TorrentResults(
 			style = MaterialTheme.typography.headlineSmall,
 			fontWeight = FontWeight.SemiBold,
 		)
+
+		startupErrorMessage?.let { message ->
+			Surface(
+				shape = RoundedCornerShape(10.dp),
+				color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.88f),
+				modifier = Modifier.testTag("torrent-startup-error"),
+			) {
+				Text(
+					text = message,
+					modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+					style = MaterialTheme.typography.bodyMedium,
+					color = MaterialTheme.colorScheme.onErrorContainer,
+				)
+			}
+		}
 
 		when {
 			state.isSearching -> {
@@ -122,9 +140,13 @@ fun TorrentResults(
 						items = state.results,
 						key = { _, result -> result.id },
 					) { index, result ->
+						val isStarting = result.id == startingResultId
 						TorrentResultRow(
 							result = result,
-							onClick = { onPlay(result) },
+							isStarting = isStarting,
+							onClick = {
+								if (!isStarting) onPlay(result)
+							},
 							modifier = if (index == 0) {
 								Modifier.focusRequester(firstFocusRequester)
 							} else {
@@ -141,6 +163,7 @@ fun TorrentResults(
 @Composable
 private fun TorrentResultRow(
 	result: TorrentSearchResult,
+	isStarting: Boolean,
 	onClick: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
@@ -162,13 +185,13 @@ private fun TorrentResultRow(
 				scaleY = scale
 			},
 		shape = shape,
-		border = if (focused) {
+		border = if (focused || isStarting) {
 			BorderStroke(3.dp, MaterialTheme.colorScheme.secondary)
 		} else {
 			BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
 		},
 		colors = CardDefaults.cardColors(
-			containerColor = if (focused) {
+			containerColor = if (focused || isStarting) {
 				MaterialTheme.colorScheme.surfaceVariant
 			} else {
 				MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
@@ -226,12 +249,31 @@ private fun TorrentResultRow(
 			}
 
 			Spacer(Modifier.width(14.dp))
-			Text(
-				text = "PLAY",
-				style = MaterialTheme.typography.labelLarge,
-				fontWeight = FontWeight.Black,
-				color = MaterialTheme.colorScheme.secondary,
-			)
+			if (isStarting) {
+				Row(
+					modifier = Modifier.testTag("torrent-starting-${result.id}"),
+					verticalAlignment = Alignment.CenterVertically,
+					horizontalArrangement = Arrangement.spacedBy(8.dp),
+				) {
+					CircularProgressIndicator(
+						modifier = Modifier.size(18.dp),
+						strokeWidth = 2.dp,
+					)
+					Text(
+						text = "STARTING…",
+						style = MaterialTheme.typography.labelLarge,
+						fontWeight = FontWeight.Black,
+						color = MaterialTheme.colorScheme.secondary,
+					)
+				}
+			} else {
+				Text(
+					text = "PLAY",
+					style = MaterialTheme.typography.labelLarge,
+					fontWeight = FontWeight.Black,
+					color = MaterialTheme.colorScheme.secondary,
+				)
+			}
 		}
 	}
 }
