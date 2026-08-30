@@ -23,7 +23,9 @@ class WatchProgressRepository(
 	private val storage: WatchProgressStorage,
 	private val nowEpochMs: () -> Long = System::currentTimeMillis,
 ) {
-	private val mutableEntries = MutableStateFlow(storage.load())
+	private val mutableEntries = MutableStateFlow(
+		storage.load().sortedByDescending { it.updatedAtEpochMs },
+	)
 	val entries: StateFlow<List<WatchProgressEntry>> = mutableEntries.asStateFlow()
 
 	fun record(
@@ -32,13 +34,15 @@ class WatchProgressRepository(
 		positionMs: Long,
 		durationMs: Long,
 	) {
-		val updated = mutableEntries.value + WatchProgressEntry(
+		val entry = WatchProgressEntry(
 			movie = movie,
 			result = result,
 			positionMs = positionMs,
 			durationMs = durationMs,
 			updatedAtEpochMs = nowEpochMs(),
 		)
+		val updated = (mutableEntries.value.filterNot { it.movie.tmdbId == movie.tmdbId } + entry)
+			.sortedByDescending { it.updatedAtEpochMs }
 		storage.save(updated)
 		mutableEntries.value = updated
 	}
