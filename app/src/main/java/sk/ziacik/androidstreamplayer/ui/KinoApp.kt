@@ -33,6 +33,7 @@ fun KinoApp(
 			MovieDetailScreen(
 				movie = selectedMovie!!,
 				torrentController = torrentSearchController,
+				playbackState = playbackState,
 				onPlay = playbackController::play,
 				onBack = {
 					playbackController.exit()
