@@ -19,6 +19,7 @@ data class WatchProgressEntry(
 interface WatchProgressStorage {
 	fun load(): List<WatchProgressEntry>
 	fun save(entries: List<WatchProgressEntry>)
+	fun saveDurably(entries: List<WatchProgressEntry>) = save(entries)
 }
 
 class WatchProgressRepository(
@@ -59,11 +60,16 @@ class WatchProgressRepository(
 	fun remove(tmdbId: Int) {
 		val updated = mutableEntries.value.filterNot { it.movie.tmdbId == tmdbId }
 		if (updated == mutableEntries.value) return
-		persist(updated)
+		persistDurably(updated)
 	}
 
 	private fun persist(entries: List<WatchProgressEntry>) {
 		storage.save(entries)
+		mutableEntries.value = entries
+	}
+
+	private fun persistDurably(entries: List<WatchProgressEntry>) {
+		storage.saveDurably(entries)
 		mutableEntries.value = entries
 	}
 }
