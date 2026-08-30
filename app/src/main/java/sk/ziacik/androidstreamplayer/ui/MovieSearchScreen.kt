@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -80,6 +81,7 @@ fun MovieSearchScreen(
 	resumeWatching: List<WatchProgressEntry> = emptyList(),
 	onResumeWatching: (WatchProgressEntry) -> Unit = {},
 	onRemoveResumeWatching: (Int) -> Unit = {},
+	startingResumeMovieId: Int? = null,
 ) {
 	val state by controller.state.collectAsState()
 	val searchRequester = remember { FocusRequester() }
@@ -227,6 +229,7 @@ fun MovieSearchScreen(
 								upFocusRequester = searchRequester,
 								onResume = onResumeWatching,
 								onOpenActions = { resumeActionEntry = it },
+								startingMovieId = startingResumeMovieId,
 							)
 							Spacer(Modifier.height(20.dp))
 						}
@@ -256,6 +259,7 @@ private fun ResumeWatchingRow(
 	upFocusRequester: FocusRequester,
 	onResume: (WatchProgressEntry) -> Unit,
 	onOpenActions: (WatchProgressEntry) -> Unit,
+	startingMovieId: Int?,
 ) {
 	Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 		Text(
@@ -278,6 +282,7 @@ private fun ResumeWatchingRow(
 					upFocusRequester = upFocusRequester,
 					onResume = { onResume(entry) },
 					onOpenActions = { onOpenActions(entry) },
+					isStarting = startingMovieId == entry.movie.tmdbId,
 				)
 			}
 		}
@@ -291,6 +296,7 @@ private fun ResumeWatchingCard(
 	upFocusRequester: FocusRequester,
 	onResume: () -> Unit,
 	onOpenActions: () -> Unit,
+	isStarting: Boolean,
 ) {
 	var focused by remember { mutableStateOf(false) }
 	var longPressTriggered by remember { mutableStateOf(false) }
@@ -306,7 +312,9 @@ private fun ResumeWatchingCard(
 	val shape = RoundedCornerShape(12.dp)
 
 	Card(
-		onClick = onResume,
+		onClick = {
+			if (!isStarting) onResume()
+		},
 		modifier = Modifier
 			.width(154.dp)
 			.testTag("resume-watching-${entry.movie.tmdbId}")
@@ -315,33 +323,40 @@ private fun ResumeWatchingCard(
 			.onFocusChanged { focused = it.isFocused }
 			.semantics {
 				onLongClick(label = "Show options") {
-					onOpenActions()
-					true
-				}
+					if (isStarting) {
+						false
+					} else {
+						onOpenActions()
+						true
+					}
 			}
 			.onPreviewKeyEvent { event ->
 				val isConfirm = event.key == Key.DirectionCenter ||
 					event.key == Key.Enter ||
 					event.key == Key.NumPadEnter
-				when (
-					resumeWatchingKeyAction(
-						isConfirm = isConfirm,
-						isDown = event.type == KeyEventType.KeyDown,
-						isUp = event.type == KeyEventType.KeyUp,
-						repeatCount = event.nativeKeyEvent.repeatCount,
-						longPressTriggered = longPressTriggered,
-					)
-				) {
-					ResumeWatchingKeyAction.OpenActions -> {
-						longPressTriggered = true
-						onOpenActions()
-						true
+				if (isStarting && isConfirm) {
+					true
+				} else {
+					when (
+						resumeWatchingKeyAction(
+							isConfirm = isConfirm,
+							isDown = event.type == KeyEventType.KeyDown,
+							isUp = event.type == KeyEventType.KeyUp,
+							repeatCount = event.nativeKeyEvent.repeatCount,
+							longPressTriggered = longPressTriggered,
+						)
+					) {
+						ResumeWatchingKeyAction.OpenActions -> {
+							longPressTriggered = true
+							onOpenActions()
+							true
+						}
+						ResumeWatchingKeyAction.Consume -> {
+							if (event.type == KeyEventType.KeyUp) longPressTriggered = false
+							true
+						}
+						ResumeWatchingKeyAction.PassThrough -> false
 					}
-					ResumeWatchingKeyAction.Consume -> {
-						if (event.type == KeyEventType.KeyUp) longPressTriggered = false
-						true
-					}
-					ResumeWatchingKeyAction.PassThrough -> false
 				}
 			}
 			.graphicsLayer {
@@ -386,6 +401,21 @@ private fun ResumeWatchingCard(
 						)
 					}
 				}
+
+				if (isStarting) {
+					Box(
+						modifier = Modifier
+							.fillMaxSize()
+							.background(Color.Black.copy(alpha = 0.58f))
+							.testTag("resume-watching-starting-${entry.movie.tmdbId}"),
+						contentAlignment = Alignment.Center,
+					) {
+						CircularProgressIndicator(
+							modifier = Modifier.size(38.dp),
+							strokeWidth = 3.dp,
+						)
+					}
+				}
 			}
 			LinearProgressIndicator(
 				progress = { progress },
@@ -403,7 +433,11 @@ private fun ResumeWatchingCard(
 					overflow = TextOverflow.Ellipsis,
 				)
 				Text(
-					text = if (focused) "Hold OK for options" else "${(progress * 100).toInt()}% watched",
+					text = when {
+						isStarting -> "Starting…"
+						focused -> "Hold OK for options"
+						else -> "${(progress * 100).toInt()}% watched"
+					},
 					style = MaterialTheme.typography.labelSmall,
 					color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.68f),
 					maxLines = 1,
