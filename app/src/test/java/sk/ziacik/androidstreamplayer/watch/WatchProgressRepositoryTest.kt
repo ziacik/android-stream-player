@@ -30,6 +30,23 @@ class WatchProgressRepositoryTest {
 		assertEquals(repository.entries.value, storage.saved)
 	}
 
+	@Test
+	fun `record replaces previous progress for same movie and keeps newest first`() {
+		val timestamps = ArrayDeque(listOf(100L, 200L, 300L))
+		val repository = WatchProgressRepository(
+			storage = FakeWatchProgressStorage(),
+			nowEpochMs = { timestamps.removeFirst() },
+		)
+
+		repository.record(movie(603, "The Matrix"), result("matrix-old"), 1_000L, 10_000L)
+		repository.record(movie(438631, "Dune"), result("dune"), 2_000L, 10_000L)
+		repository.record(movie(603, "The Matrix"), result("matrix-new"), 3_000L, 10_000L)
+
+		assertEquals(listOf(603, 438631), repository.entries.value.map { it.movie.tmdbId })
+		assertEquals("matrix-new", repository.entries.value.first().result.id)
+		assertEquals(3_000L, repository.entries.value.first().positionMs)
+	}
+
 	private fun movie(id: Int, title: String) = Movie(
 		tmdbId = id,
 		title = title,
