@@ -12,7 +12,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import sk.ziacik.androidstreamplayer.player.Media3PlayerPort
-import sk.ziacik.androidstreamplayer.search.FakeTorrentSearchProvider
+import sk.ziacik.androidstreamplayer.search.KnabenTorrentSearchProvider
 import sk.ziacik.androidstreamplayer.search.SearchController
 import sk.ziacik.androidstreamplayer.torrent.LocalTorrServerRuntime
 import sk.ziacik.androidstreamplayer.torrent.TorrServerClient
@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
 
         searchController = SearchController(
             scope = appScope,
-            provider = FakeTorrentSearchProvider(),
+            provider = KnabenTorrentSearchProvider(),
             streamer = torrentStreamer,
             onStreamReady = { source ->
                 playerPort.prepare(source)
