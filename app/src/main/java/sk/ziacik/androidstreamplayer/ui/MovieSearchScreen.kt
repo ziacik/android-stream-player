@@ -312,9 +312,8 @@ private fun ResumeWatchingCard(
 	val shape = RoundedCornerShape(12.dp)
 
 	Card(
-		onClick = {
-			if (!isStarting) onResume()
-		},
+		onClick = onResume,
+		enabled = !isStarting,
 		modifier = Modifier
 			.width(154.dp)
 			.testTag("resume-watching-${entry.movie.tmdbId}")
@@ -323,40 +322,33 @@ private fun ResumeWatchingCard(
 			.onFocusChanged { focused = it.isFocused }
 			.semantics {
 				onLongClick(label = "Show options") {
-					if (isStarting) {
-						false
-					} else {
-						onOpenActions()
-						true
-					}
+					onOpenActions()
+					true
+				}
 			}
 			.onPreviewKeyEvent { event ->
 				val isConfirm = event.key == Key.DirectionCenter ||
 					event.key == Key.Enter ||
 					event.key == Key.NumPadEnter
-				if (isStarting && isConfirm) {
-					true
-				} else {
-					when (
-						resumeWatchingKeyAction(
-							isConfirm = isConfirm,
-							isDown = event.type == KeyEventType.KeyDown,
-							isUp = event.type == KeyEventType.KeyUp,
-							repeatCount = event.nativeKeyEvent.repeatCount,
-							longPressTriggered = longPressTriggered,
-						)
-					) {
-						ResumeWatchingKeyAction.OpenActions -> {
-							longPressTriggered = true
-							onOpenActions()
-							true
-						}
-						ResumeWatchingKeyAction.Consume -> {
-							if (event.type == KeyEventType.KeyUp) longPressTriggered = false
-							true
-						}
-						ResumeWatchingKeyAction.PassThrough -> false
+				when (
+					resumeWatchingKeyAction(
+						isConfirm = isConfirm,
+						isDown = event.type == KeyEventType.KeyDown,
+						isUp = event.type == KeyEventType.KeyUp,
+						repeatCount = event.nativeKeyEvent.repeatCount,
+						longPressTriggered = longPressTriggered,
+					)
+				) {
+					ResumeWatchingKeyAction.OpenActions -> {
+						longPressTriggered = true
+						onOpenActions()
+						true
 					}
+					ResumeWatchingKeyAction.Consume -> {
+						if (event.type == KeyEventType.KeyUp) longPressTriggered = false
+						true
+					}
+					ResumeWatchingKeyAction.PassThrough -> false
 				}
 			}
 			.graphicsLayer {
@@ -568,7 +560,7 @@ private fun MovieSearchError(onRetry: () -> Unit) {
 			style = MaterialTheme.typography.bodyMedium,
 			color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.62f),
 		)
-		androidx.compose.material3.Button(onClick = onRetry) {
+		Button(onClick = onRetry) {
 			Text("Retry")
 		}
 	}
