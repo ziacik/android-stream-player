@@ -18,6 +18,7 @@ import org.junit.Test
 import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.catalog.MovieCatalog
 import sk.ziacik.androidstreamplayer.catalog.MovieExternalIds
+import sk.ziacik.androidstreamplayer.playback.PlaybackUiState
 import sk.ziacik.androidstreamplayer.search.TorrentSearchController
 import sk.ziacik.androidstreamplayer.search.TorrentSearchProvider
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
@@ -100,9 +101,46 @@ class MovieDetailScreenTest {
 		}
 	}
 
+	@Test
+	fun startingTorrentShowsInlineFeedbackAndKeepsOtherVersionsVisible() {
+		val first = torrent("hit-1")
+		val second = torrent("hit-2")
+		setDetail(
+			provider = TorrentSearchProvider { listOf(first, second) },
+			playbackState = PlaybackUiState(
+				selectedResult = first,
+				status = "Preparing stream…",
+			),
+		)
+
+		composeRule.waitUntil(timeoutMillis = 5_000) {
+			composeRule.onAllNodes(hasTestTag("torrent-starting-hit-1")).fetchSemanticsNodes().isNotEmpty()
+		}
+		composeRule.onNodeWithTag("torrent-starting-hit-1").assertIsDisplayed()
+		composeRule.onNodeWithTag("torrent-hit-2").assertIsDisplayed()
+	}
+
+	@Test
+	fun failedTorrentStartupShowsRetryGuidance() {
+		val hit = torrent()
+		setDetail(
+			provider = TorrentSearchProvider { listOf(hit) },
+			playbackState = PlaybackUiState(
+				selectedResult = hit,
+				status = "Stream failed",
+			),
+		)
+
+		composeRule.waitUntil(timeoutMillis = 5_000) {
+			composeRule.onAllNodes(hasTestTag("torrent-hit-1")).fetchSemanticsNodes().isNotEmpty()
+		}
+		composeRule.onNodeWithText("Could not start stream. Try another version.").assertIsDisplayed()
+	}
+
 	private fun setDetail(
 		provider: TorrentSearchProvider,
 		onPlay: (TorrentSearchResult) -> Unit = {},
+		playbackState: PlaybackUiState = PlaybackUiState(),
 	) {
 		val controller = TorrentSearchController(
 			scope = scope,
@@ -113,6 +151,7 @@ class MovieDetailScreenTest {
 			MovieDetailScreen(
 				movie = matrix(),
 				torrentController = controller,
+				playbackState = playbackState,
 				onPlay = onPlay,
 				onBack = {},
 			)
@@ -130,10 +169,10 @@ class MovieDetailScreenTest {
 		backdropPath = null,
 	)
 
-	private fun torrent() = TorrentSearchResult(
-		id = "hit-1",
-		title = "The.Matrix.1999.1080p.BluRay",
-		magnetUri = "magnet:?xt=urn:btih:matrix",
+	private fun torrent(id: String = "hit-1") = TorrentSearchResult(
+		id = id,
+		title = "The.Matrix.1999.$id.1080p.BluRay",
+		magnetUri = "magnet:?xt=urn:btih:$id",
 		quality = "1080p",
 		sizeBytes = 8_000_000_000,
 		seeders = 42,
