@@ -24,6 +24,7 @@ import sk.ziacik.androidstreamplayer.torrent.TorrServerRuntime
 import sk.ziacik.androidstreamplayer.torrent.TorrServerTorrentStreamer
 import sk.ziacik.androidstreamplayer.ui.KinoApp
 import sk.ziacik.androidstreamplayer.ui.KinoPlayerScreen
+import sk.ziacik.androidstreamplayer.ui.WatchProgressEffect
 import sk.ziacik.androidstreamplayer.ui.theme.AndroidStreamPlayerTheme
 import sk.ziacik.androidstreamplayer.watch.SharedPreferencesWatchProgressStorage
 import sk.ziacik.androidstreamplayer.watch.WatchProgressRepository
@@ -93,7 +94,14 @@ class MainActivity : ComponentActivity() {
 					torrentSearchController = torrentSearchController,
 					playbackController = playbackController,
 					watchProgressRepository = watchProgressRepository,
-					playerContent = { _, result, _, onExit ->
+					playerContent = { movie, result, resumePositionMs, onExit ->
+						WatchProgressEffect(
+							player = playerPort.player,
+							movie = movie,
+							result = result,
+							resumePositionMs = resumePositionMs,
+							repository = watchProgressRepository,
+						)
 						KinoPlayerScreen(
 							player = playerPort.player,
 							result = result,
