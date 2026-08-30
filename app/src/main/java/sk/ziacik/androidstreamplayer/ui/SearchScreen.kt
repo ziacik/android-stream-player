@@ -50,10 +50,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.PlayerView
 import java.util.Locale
 import sk.ziacik.androidstreamplayer.search.SearchController
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
@@ -69,20 +67,11 @@ fun SearchScreen(
     val streamStatus = state.streamStatus
 
     if (streamStatus == "Playing" && player != null) {
-        AndroidView(
-            factory = { context ->
-                PlayerView(context).apply {
-                    this.player = player
-                    useController = true
-                    keepScreenOn = true
-                }
-            },
-            update = { view ->
-                view.player = player
-            },
-            modifier = modifier
-                .fillMaxSize()
-                .testTag("player-view"),
+        KinoPlayerScreen(
+            player = player,
+            result = state.selectedResult,
+            onExit = controller::exitPlayback,
+            modifier = modifier,
         )
         return
     }
