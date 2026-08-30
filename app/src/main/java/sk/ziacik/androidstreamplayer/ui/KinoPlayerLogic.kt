@@ -1,5 +1,9 @@
 package sk.ziacik.androidstreamplayer.ui
 
+import kotlin.math.abs
+
+private const val WATCH_PROGRESS_PERSIST_INTERVAL_MS = 5_000L
+
 internal fun seekTargetMs(
     currentMs: Long,
     deltaMs: Long,
@@ -20,5 +24,20 @@ internal fun formatPlaybackTime(positionMs: Long): String {
         "%d:%02d:%02d".format(hours, minutes, seconds)
     } else {
         "%d:%02d".format(minutes, seconds)
+    }
+}
+
+internal fun shouldPersistWatchProgress(
+    lastPersistedMs: Long?,
+    positionMs: Long,
+    durationMs: Long?,
+): Boolean {
+    if (durationMs == null || durationMs <= 0L) return false
+
+    val normalizedPositionMs = positionMs.coerceAtLeast(0L)
+    return if (lastPersistedMs == null) {
+        normalizedPositionMs >= WATCH_PROGRESS_PERSIST_INTERVAL_MS
+    } else {
+        abs(normalizedPositionMs - lastPersistedMs) >= WATCH_PROGRESS_PERSIST_INTERVAL_MS
     }
 }
