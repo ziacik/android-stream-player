@@ -14,6 +14,15 @@ internal fun seekTargetMs(
     return finiteDuration?.let(target::coerceAtMost) ?: target
 }
 
+internal fun resumeSeekTargetMs(
+    resumePositionMs: Long?,
+    durationMs: Long?,
+): Long? {
+    val positionMs = resumePositionMs?.takeIf { it > 0L } ?: return null
+    val finiteDuration = durationMs?.takeIf { it > 0L }
+    return finiteDuration?.let(positionMs::coerceAtMost) ?: positionMs
+}
+
 internal fun formatPlaybackTime(positionMs: Long): String {
     val totalSeconds = positionMs.coerceAtLeast(0L) / 1_000L
     val hours = totalSeconds / 3_600L
