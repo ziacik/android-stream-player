@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="@color/kino_champagne"
+        android:fillAlpha="0.13"
+        android:pathData="M55,49 L92,34 L92,74 L55,60 Z" />
+
+    <path
+        android:fillColor="@color/kino_champagne"
+        android:pathData="M29,23 L43,23 L43,85 L29,85 Z" />
+    <path
+        android:fillColor="@color/kino_champagne_soft"
+        android:pathData="M42,52 L67,23 L82,23 L53,56 Z" />
+    <path
+        android:fillColor="@color/kino_champagne"
+        android:pathData="M51,57 L82,85 L64,85 L42,65 Z" />
+
+    <path
+        android:fillColor="@color/kino_burgundy"
+        android:pathData="M43,47 L60,56 L43,66 Z" />
+</vector>
