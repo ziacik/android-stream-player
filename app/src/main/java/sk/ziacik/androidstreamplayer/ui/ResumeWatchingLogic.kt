@@ -20,6 +20,6 @@ internal fun resumeWatchingKeyAction(
 }
 
 internal fun startingResumeMovieId(
-	playbackStatus: String,
+	playbackStatus: String?,
 	playbackMovieId: Int?,
 ): Int? = playbackMovieId?.takeIf { playbackStatus == "Preparing stream…" }
