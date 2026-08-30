@@ -1,9 +1,7 @@
 package sk.ziacik.androidstreamplayer.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodes
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -50,7 +48,9 @@ class MovieSearchScreenTest {
 
 		composeRule.onNodeWithTag("movie-search-input").performTextInput("Matrix")
 		composeRule.waitUntil(timeoutMillis = 5_000) {
-			composeRule.onAllNodes(hasTestTag("movie-603")).fetchSemanticsNodes().isNotEmpty()
+			runCatching {
+				composeRule.onNodeWithTag("movie-603").fetchSemanticsNode()
+			}.isSuccess
 		}
 		composeRule.onNodeWithTag("movie-603").performClick()
 
@@ -74,7 +74,9 @@ class MovieSearchScreenTest {
 		composeRule.onNodeWithTag("movie-search-input").performTextInput("Unknown")
 
 		composeRule.waitUntil(timeoutMillis = 5_000) {
-			composeRule.onAllNodes(hasTestTag("movie-search-empty")).fetchSemanticsNodes().isNotEmpty()
+			runCatching {
+				composeRule.onNodeWithTag("movie-search-empty").fetchSemanticsNode()
+			}.isSuccess
 		}
 		composeRule.onNodeWithText("No movies found").assertIsDisplayed()
 	}
@@ -94,7 +96,9 @@ class MovieSearchScreenTest {
 		composeRule.onNodeWithTag("movie-search-input").performTextInput("Matrix")
 
 		composeRule.waitUntil(timeoutMillis = 5_000) {
-			composeRule.onAllNodes(hasTestTag("movie-search-error")).fetchSemanticsNodes().isNotEmpty()
+			runCatching {
+				composeRule.onNodeWithTag("movie-search-error").fetchSemanticsNode()
+			}.isSuccess
 		}
 		composeRule.onNodeWithText("Couldn’t search movies").assertIsDisplayed()
 		composeRule.onNodeWithText("Retry").assertIsDisplayed()
