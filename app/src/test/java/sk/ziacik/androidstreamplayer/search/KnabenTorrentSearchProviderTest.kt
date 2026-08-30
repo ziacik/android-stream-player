@@ -214,10 +214,10 @@ class KnabenTorrentSearchProviderTest {
             JSONObject(request.bodyUtf8()).getString("query")
         }
     }
+}
 
-    private fun Request.bodyUtf8(): String {
-        val buffer = Buffer()
-        requireNotNull(body).writeTo(buffer)
-        return buffer.readUtf8()
-    }
+private fun Request.bodyUtf8(): String {
+    val buffer = Buffer()
+    requireNotNull(body).writeTo(buffer)
+    return buffer.readUtf8()
 }
