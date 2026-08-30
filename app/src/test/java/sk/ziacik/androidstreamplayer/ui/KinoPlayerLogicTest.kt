@@ -2,6 +2,7 @@ package sk.ziacik.androidstreamplayer.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -20,6 +21,15 @@ class KinoPlayerLogicTest {
     fun `seek with unknown duration still clamps at zero`() {
         assertEquals(0L, seekTargetMs(currentMs = 2_000L, deltaMs = -10_000L, durationMs = null))
         assertEquals(12_000L, seekTargetMs(currentMs = 2_000L, deltaMs = 10_000L, durationMs = null))
+    }
+
+    @Test
+    fun `resume seek ignores empty positions and clamps to movie duration`() {
+        assertNull(resumeSeekTargetMs(resumePositionMs = null, durationMs = 600_000L))
+        assertNull(resumeSeekTargetMs(resumePositionMs = 0L, durationMs = 600_000L))
+        assertNull(resumeSeekTargetMs(resumePositionMs = -1L, durationMs = 600_000L))
+        assertEquals(300_000L, resumeSeekTargetMs(resumePositionMs = 300_000L, durationMs = null))
+        assertEquals(600_000L, resumeSeekTargetMs(resumePositionMs = 700_000L, durationMs = 600_000L))
     }
 
     @Test
