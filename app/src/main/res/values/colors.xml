@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="kino_charcoal">#FF100C10</color>
+    <color name="kino_burgundy">#FF5C1830</color>
+    <color name="kino_burgundy_deep">#FF2A101B</color>
+    <color name="kino_champagne">#FFE7C9A2</color>
+    <color name="kino_champagne_soft">#FFF3DEC2</color>
+    <color name="ic_launcher_background">#FF1A0E15</color>
+</resources>

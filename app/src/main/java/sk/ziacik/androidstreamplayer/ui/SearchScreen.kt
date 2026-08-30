@@ -126,7 +126,7 @@ fun SearchScreen(
                     .padding(horizontal = 64.dp, vertical = 42.dp),
             ) {
                 Text(
-                    text = "ANDROID STREAM PLAYER",
+                    text = "KINO",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.secondary,
                     fontWeight = FontWeight.SemiBold,
