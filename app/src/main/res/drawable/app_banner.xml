@@ -1,8 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <corners android:radius="12dp" />
-    <gradient
-        android:angle="0"
-        android:startColor="#16131F"
-        android:endColor="#31214A" />
-</shape>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <size
+                android:width="320dp"
+                android:height="180dp" />
+            <gradient
+                android:type="linear"
+                android:angle="0"
+                android:startColor="@color/kino_charcoal"
+                android:centerColor="@color/kino_burgundy_deep"
+                android:endColor="#FF3C1325" />
+        </shape>
+    </item>
+
+    <item
+        android:left="214dp"
+        android:top="22dp"
+        android:right="-52dp"
+        android:bottom="22dp">
+        <shape android:shape="oval">
+            <solid android:color="#245C1830" />
+        </shape>
+    </item>
+
+    <item
+        android:width="286dp"
+        android:height="96dp"
+        android:gravity="center"
+        android:drawable="@drawable/kino_wordmark_banner" />
+</layer-list>
