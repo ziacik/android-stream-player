@@ -6,6 +6,11 @@ internal sealed interface ResumeWatchingKeyAction {
 	data object PassThrough : ResumeWatchingKeyAction
 }
 
+internal enum class ResumeWatchingActivation {
+	Resume,
+	Cancel,
+}
+
 internal data class ResumeActionsKeyDecision(
 	val consume: Boolean,
 	val waitingForRelease: Boolean,
@@ -23,6 +28,11 @@ internal fun resumeWatchingKeyAction(
 	isConfirm && isUp && longPressTriggered -> ResumeWatchingKeyAction.Consume
 	else -> ResumeWatchingKeyAction.PassThrough
 }
+
+internal fun resumeWatchingActivation(isStarting: Boolean): ResumeWatchingActivation =
+	if (isStarting) ResumeWatchingActivation.Cancel else ResumeWatchingActivation.Resume
+
+internal fun resumeWatchingOptionsEnabled(isStarting: Boolean): Boolean = !isStarting
 
 internal fun resumeActionsKeyDecision(
 	isConfirm: Boolean,
