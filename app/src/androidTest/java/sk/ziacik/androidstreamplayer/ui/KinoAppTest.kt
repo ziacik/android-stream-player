@@ -214,5 +214,16 @@ class KinoAppTest {
 
 		override suspend fun externalIds(tmdbId: Int): MovieExternalIds =
 			MovieExternalIds("tt0133093")
+
+		private fun matrix() = Movie(
+			tmdbId = 603,
+			title = "The Matrix",
+			originalTitle = "The Matrix",
+			releaseYear = 1999,
+			overview = "A hacker discovers the truth about his world.",
+			voteAverage = 8.2,
+			posterPath = null,
+			backdropPath = null,
+		)
 	}
 }
