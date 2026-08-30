@@ -25,6 +25,8 @@ import sk.ziacik.androidstreamplayer.torrent.TorrServerTorrentStreamer
 import sk.ziacik.androidstreamplayer.ui.KinoApp
 import sk.ziacik.androidstreamplayer.ui.KinoPlayerScreen
 import sk.ziacik.androidstreamplayer.ui.theme.AndroidStreamPlayerTheme
+import sk.ziacik.androidstreamplayer.watch.SharedPreferencesWatchProgressStorage
+import sk.ziacik.androidstreamplayer.watch.WatchProgressRepository
 
 @UnstableApi
 class MainActivity : ComponentActivity() {
@@ -36,6 +38,7 @@ class MainActivity : ComponentActivity() {
 	private lateinit var playbackController: PlaybackController
 	private lateinit var playerPort: Media3PlayerPort
 	private lateinit var torrentRuntime: TorrServerRuntime
+	private lateinit var watchProgressRepository: WatchProgressRepository
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
@@ -47,6 +50,9 @@ class MainActivity : ComponentActivity() {
 				View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
 
 		playerPort = Media3PlayerPort(this)
+		watchProgressRepository = WatchProgressRepository(
+			storage = SharedPreferencesWatchProgressStorage(applicationContext),
+		)
 
 		val torrServerClient = TorrServerClient()
 		val torrServerProcess = TorrServerProcess(
@@ -86,7 +92,8 @@ class MainActivity : ComponentActivity() {
 					movieSearchController = movieSearchController,
 					torrentSearchController = torrentSearchController,
 					playbackController = playbackController,
-					playerContent = { result, onExit ->
+					watchProgressRepository = watchProgressRepository,
+					playerContent = { _, result, _, onExit ->
 						KinoPlayerScreen(
 							player = playerPort.player,
 							result = result,
