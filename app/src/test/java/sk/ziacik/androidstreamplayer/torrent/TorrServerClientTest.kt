@@ -78,12 +78,12 @@ class TorrServerClientTest {
     }
 
     @Test
-    fun configureStreamingSettingsPreservesExistingSettingsAndExtendsDisconnectTimeout() = runTest {
+    fun configureStreamingSettingsPreservesExistingSettingsAndDisablesUpload() = runTest {
         val transport = FakeTransport(
             responses = mutableListOf(
                 TorrServerHttpResponse(
                     code = 200,
-                    body = """{"CacheSize":67108864,"ReaderReadAHead":95,"PreloadCache":50,"UseDisk":false,"TorrentDisconnectTimeout":30,"ConnectionsLimit":25,"EnableDHT":true}""",
+                    body = """{"CacheSize":67108864,"ReaderReadAHead":95,"PreloadCache":50,"UseDisk":false,"DisableUpload":false,"TorrentDisconnectTimeout":30,"ConnectionsLimit":25,"EnableDHT":true}""",
                 ),
                 TorrServerHttpResponse(code = 200, body = ""),
             ),
@@ -101,6 +101,7 @@ class TorrServerClientTest {
         val settings = setBody.getJSONObject("sets")
         assertEquals(120, settings.getInt("TorrentDisconnectTimeout"))
         assertFalse(settings.getBoolean("UseDisk"))
+        assertTrue(settings.getBoolean("DisableUpload"))
         assertEquals(67108864, settings.getInt("CacheSize"))
         assertEquals(95, settings.getInt("ReaderReadAHead"))
         assertEquals(25, settings.getInt("ConnectionsLimit"))
