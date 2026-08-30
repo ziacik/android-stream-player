@@ -1,5 +1,7 @@
 package sk.ziacik.androidstreamplayer.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,19 +9,25 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -33,24 +41,41 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.nativeKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.catalog.MovieSearchController
+import sk.ziacik.androidstreamplayer.catalog.tmdbPosterUrl
+import sk.ziacik.androidstreamplayer.watch.WatchProgressEntry
 
 @Composable
 fun MovieSearchScreen(
 	controller: MovieSearchController,
 	onMovieSelected: (Movie) -> Unit,
 	modifier: Modifier = Modifier,
+	resumeWatching: List<WatchProgressEntry> = emptyList(),
+	onResumeWatching: (WatchProgressEntry) -> Unit = {},
+	onRemoveResumeWatching: (Int) -> Unit = {},
 ) {
 	val state by controller.state.collectAsState()
 	val searchRequester = remember { FocusRequester() }
@@ -59,6 +84,11 @@ fun MovieSearchScreen(
 	val posterRequesters = remember(movieIds) {
 		movieIds.associateWith { FocusRequester() }
 	}
+	val resumeIds = resumeWatching.map { it.movie.tmdbId }
+	val resumeRequesters = remember(resumeIds) {
+		resumeIds.associateWith { FocusRequester() }
+	}
+	val firstResumeRequester = resumeWatching.firstOrNull()?.let { resumeRequesters[it.movie.tmdbId] }
 	val firstPosterRequester = state.results.firstOrNull()?.let { posterRequesters[it.tmdbId] }
 	var initialFocusHandled by remember { mutableStateOf(false) }
 
@@ -94,7 +124,6 @@ fun MovieSearchScreen(
 							Color.Black,
 						),
 					),
-				),
 		) {
 			Box(
 				modifier = Modifier
@@ -126,7 +155,7 @@ fun MovieSearchScreen(
 						.testTag("movie-search-input")
 						.focusRequester(searchRequester)
 						.focusProperties {
-							firstPosterRequester?.let { down = it }
+							down = firstResumeRequester ?: firstPosterRequester ?: FocusRequester.Default
 						},
 					placeholder = { Text("Movie title") },
 					singleLine = true,
@@ -180,8 +209,172 @@ fun MovieSearchScreen(
 						}
 					}
 					state.query.trim().length >= 2 -> MovieSearchEmpty()
-					else -> MovieSearchLanding()
+					else -> {
+						if (resumeWatching.isNotEmpty()) {
+							ResumeWatchingRow(
+								entries = resumeWatching,
+								focusRequesters = resumeRequesters,
+								upFocusRequester = searchRequester,
+								onResume = onResumeWatching,
+								onRemove = onRemoveResumeWatching,
+							)
+							Spacer(Modifier.height(20.dp))
+						}
+						MovieSearchLanding()
+					}
 				}
+			}
+		}
+	}
+}
+
+@Composable
+private fun ResumeWatchingRow(
+	entries: List<WatchProgressEntry>,
+	focusRequesters: Map<Int, FocusRequester>,
+	upFocusRequester: FocusRequester,
+	onResume: (WatchProgressEntry) -> Unit,
+	onRemove: (Int) -> Unit,
+) {
+	Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+		Text(
+			text = "Resume Watching",
+			style = MaterialTheme.typography.titleLarge,
+			fontWeight = FontWeight.SemiBold,
+			color = MaterialTheme.colorScheme.onBackground,
+		)
+		LazyRow(
+			horizontalArrangement = Arrangement.spacedBy(18.dp),
+			contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
+		) {
+			items(
+				items = entries,
+				key = { it.movie.tmdbId },
+			) { entry ->
+				ResumeWatchingCard(
+					entry = entry,
+					focusRequester = focusRequesters.getValue(entry.movie.tmdbId),
+					upFocusRequester = upFocusRequester,
+					onResume = { onResume(entry) },
+					onRemove = { onRemove(entry.movie.tmdbId) },
+				)
+			}
+		}
+	}
+}
+
+@Composable
+private fun ResumeWatchingCard(
+	entry: WatchProgressEntry,
+	focusRequester: FocusRequester,
+	upFocusRequester: FocusRequester,
+	onResume: () -> Unit,
+	onRemove: () -> Unit,
+) {
+	var focused by remember { mutableStateOf(false) }
+	var removeTriggered by remember { mutableStateOf(false) }
+	val scale by animateFloatAsState(
+		targetValue = if (focused) 1.04f else 1f,
+		label = "resume-watching-scale",
+	)
+	val progress = if (entry.durationMs > 0L) {
+		(entry.positionMs.toFloat() / entry.durationMs.toFloat()).coerceIn(0f, 1f)
+	} else {
+		0f
+	}
+	val shape = RoundedCornerShape(12.dp)
+
+	Card(
+		onClick = onResume,
+		modifier = Modifier
+			.width(154.dp)
+			.testTag("resume-watching-${entry.movie.tmdbId}")
+			.focusRequester(focusRequester)
+			.focusProperties { up = upFocusRequester }
+			.onFocusChanged { focused = it.isFocused }
+			.onPreviewKeyEvent { event ->
+				val isConfirm = event.key == Key.DirectionCenter ||
+					event.key == Key.Enter ||
+					event.key == Key.NumPadEnter
+				when {
+					isConfirm && event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount > 0 -> {
+						if (!removeTriggered) {
+							removeTriggered = true
+							onRemove()
+						}
+						true
+					}
+					isConfirm && event.type == KeyEventType.KeyUp && removeTriggered -> {
+						removeTriggered = false
+						true
+					}
+					else -> false
+				}
+			}
+			.graphicsLayer {
+				scaleX = scale
+				scaleY = scale
+			},
+		shape = shape,
+		border = if (focused) {
+			BorderStroke(3.dp, MaterialTheme.colorScheme.secondary)
+		} else {
+			BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
+		},
+		colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+	) {
+		Column {
+			Box(
+				modifier = Modifier
+					.fillMaxWidth()
+					.aspectRatio(2f / 3f)
+					.clip(shape),
+			) {
+				val posterUrl = tmdbPosterUrl(entry.movie.posterPath)
+				if (posterUrl != null) {
+					AsyncImage(
+						model = posterUrl,
+						contentDescription = entry.movie.title,
+						contentScale = ContentScale.Crop,
+						modifier = Modifier.fillMaxSize(),
+					)
+				} else {
+					Box(
+						modifier = Modifier
+							.fillMaxSize()
+							.background(MaterialTheme.colorScheme.surfaceVariant),
+						contentAlignment = Alignment.Center,
+					) {
+						Text(
+							text = entry.movie.title.take(1).uppercase(),
+							style = MaterialTheme.typography.displayMedium,
+							fontWeight = FontWeight.Black,
+							color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+						)
+					}
+				}
+			}
+			LinearProgressIndicator(
+				progress = { progress },
+				modifier = Modifier.fillMaxWidth(),
+			)
+			Column(
+				modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+				verticalArrangement = Arrangement.spacedBy(2.dp),
+			) {
+				Text(
+					text = entry.movie.title,
+					style = MaterialTheme.typography.titleSmall,
+					fontWeight = FontWeight.SemiBold,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+				)
+				Text(
+					text = if (focused) "Hold OK to remove" else "${(progress * 100).toInt()}% watched",
+					style = MaterialTheme.typography.labelSmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.68f),
+					maxLines = 1,
+				)
 			}
 		}
 	}
@@ -244,7 +437,7 @@ private fun MovieSearchError(onRetry: () -> Unit) {
 			style = MaterialTheme.typography.bodyMedium,
 			color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.62f),
 		)
-		Button(onClick = onRetry) {
+		androidx.compose.material3.Button(onClick = onRetry) {
 			Text("Retry")
 		}
 	}
