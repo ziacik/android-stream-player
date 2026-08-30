@@ -74,6 +74,24 @@ class WatchProgressRepositoryTest {
 		assertEquals(repository.entries.value, storage.saved)
 	}
 
+	@Test
+	fun `manual remove survives immediate repository recreation`() {
+		val entry = WatchProgressEntry(
+			movie = movie(603, "The Matrix"),
+			result = result("matrix"),
+			positionMs = 5_000L,
+			durationMs = 10_000L,
+			updatedAtEpochMs = 123L,
+		)
+		val storage = DelayedWatchProgressStorage(listOf(entry))
+		val repository = WatchProgressRepository(storage)
+
+		repository.remove(603)
+		val recreatedRepository = WatchProgressRepository(storage)
+
+		assertEquals(emptyList<WatchProgressEntry>(), recreatedRepository.entries.value)
+	}
+
 	private fun movie(id: Int, title: String) = Movie(
 		tmdbId = id,
 		title = title,
@@ -99,5 +117,23 @@ private class FakeWatchProgressStorage : WatchProgressStorage {
 
 	override fun save(entries: List<WatchProgressEntry>) {
 		saved = entries
+	}
+}
+
+private class DelayedWatchProgressStorage(
+	initialEntries: List<WatchProgressEntry>,
+) : WatchProgressStorage {
+	private var durableEntries = initialEntries
+	private var pendingEntries = initialEntries
+
+	override fun load(): List<WatchProgressEntry> = durableEntries
+
+	override fun save(entries: List<WatchProgressEntry>) {
+		pendingEntries = entries
+	}
+
+	fun saveDurably(entries: List<WatchProgressEntry>) {
+		pendingEntries = entries
+		durableEntries = entries
 	}
 }
