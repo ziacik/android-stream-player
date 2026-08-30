@@ -122,6 +122,29 @@ class MovieSearchScreenTest {
 	}
 
 	@Test
+	fun startingResumeShowsImmediateFeedback() {
+		val controller = MovieSearchController(
+			scope = scope,
+			catalog = FakeCatalog(),
+			debounceMs = 0,
+		)
+
+		composeRule.setContent {
+			MovieSearchScreen(
+				controller = controller,
+				onMovieSelected = {},
+				resumeWatching = listOf(watchProgressEntry()),
+				onResumeWatching = {},
+				onRemoveResumeWatching = {},
+				startingResumeMovieId = 603,
+			)
+		}
+
+		composeRule.onNodeWithText("Starting…").assertIsDisplayed()
+		composeRule.onNodeWithTag("resume-watching-starting-603").assertIsDisplayed()
+	}
+
+	@Test
 	fun emptySearchShowsNoMoviesFound() {
 		val controller = MovieSearchController(
 			scope = scope,
