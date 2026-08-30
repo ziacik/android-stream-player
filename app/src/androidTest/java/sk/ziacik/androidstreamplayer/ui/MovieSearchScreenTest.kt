@@ -114,7 +114,7 @@ class MovieSearchScreenTest {
 		composeRule.onNodeWithTag("resume-watching-603")
 			.performSemanticsAction(SemanticsActions.OnLongClick) { it() }
 
-		composeRule.onNodeWithText("Remove from Continue Watching").assertIsDisplayed()
+		composeRule.onNodeWithText("Remove from Resume Watching").assertIsDisplayed()
 		composeRule.onNodeWithText("Cancel").assertIsDisplayed()
 		composeRule.runOnIdle {
 			assertNull(removedMovieId)
@@ -140,7 +140,7 @@ class MovieSearchScreenTest {
 			)
 		}
 
-		composeRule.onNodeWithText("Starting…").assertIsDisplayed()
+		composeRule.onNodeWithText("Starting… · OK to cancel").assertIsDisplayed()
 		composeRule.onNodeWithTag("resume-watching-starting-603").assertIsDisplayed()
 	}
 
