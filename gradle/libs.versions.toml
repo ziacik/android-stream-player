@@ -8,7 +8,6 @@ okhttp = "5.1.0"
 coroutines = "1.10.2"
 junit = "4.13.2"
 androidxTestRunner = "1.7.0"
-robolectric = "4.16.1"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -26,7 +25,6 @@ kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutine
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 junit = { module = "junit:junit", version.ref = "junit" }
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
-robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
