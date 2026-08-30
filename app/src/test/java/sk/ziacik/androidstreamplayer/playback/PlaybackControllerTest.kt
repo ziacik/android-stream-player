@@ -1,6 +1,8 @@
 package sk.ziacik.androidstreamplayer.playback
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -35,6 +37,33 @@ class PlaybackControllerTest {
 		assertEquals(selected, prepared)
 		assertEquals(source, played)
 		assertEquals("Playing", controller.state.value.status)
+	}
+
+	@Test
+	fun `starting another torrent replaces the active startup`() = runTest {
+		val gate = CompletableDeferred<Unit>()
+		val started = mutableListOf<String>()
+		val controller = PlaybackController(
+			scope = this,
+			streamer = TorrentStreamer { selected ->
+				started += selected.id
+				gate.await()
+				TorrentSource("torrent://stream/${selected.id}.mkv")
+			},
+		)
+
+		controller.play(result("first"))
+		runCurrent()
+		assertEquals(listOf("first"), started)
+		assertEquals("first", controller.state.value.startingResultId)
+
+		controller.play(result("second"))
+		runCurrent()
+
+		assertEquals(listOf("first", "second"), started)
+		assertEquals("second", controller.state.value.selectedResult?.id)
+		assertEquals("second", controller.state.value.startingResultId)
+		controller.exit()
 	}
 
 	@Test
