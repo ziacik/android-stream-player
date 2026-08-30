@@ -198,7 +198,9 @@ fun KinoPlayerScreen(
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(value: Boolean) {
                 isPlaying = value
-                if (!value) showOverlay()
+                if (shouldRevealOverlayForPlaybackState(value, player.playWhenReady)) {
+                    showOverlay()
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
