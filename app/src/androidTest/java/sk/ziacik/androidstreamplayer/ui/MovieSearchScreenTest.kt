@@ -1,10 +1,12 @@
 package sk.ziacik.androidstreamplayer.ui
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,12 +14,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.catalog.MovieCatalog
 import sk.ziacik.androidstreamplayer.catalog.MovieExternalIds
 import sk.ziacik.androidstreamplayer.catalog.MovieSearchController
+import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
+import sk.ziacik.androidstreamplayer.watch.WatchProgressEntry
 
 class MovieSearchScreenTest {
 	@get:Rule
@@ -57,6 +62,86 @@ class MovieSearchScreenTest {
 		composeRule.runOnIdle {
 			assertEquals(603, selected?.tmdbId)
 		}
+	}
+
+	@Test
+	fun landingShowsResumeWatchingAndClickReturnsStoredEntry() {
+		var resumed: WatchProgressEntry? = null
+		val entry = watchProgressEntry()
+		val controller = MovieSearchController(
+			scope = scope,
+			catalog = FakeCatalog(),
+			debounceMs = 0,
+		)
+
+		composeRule.setContent {
+			MovieSearchScreen(
+				controller = controller,
+				onMovieSelected = {},
+				resumeWatching = listOf(entry),
+				onResumeWatching = { resumed = it },
+				onRemoveResumeWatching = {},
+			)
+		}
+
+		composeRule.onNodeWithText("Resume Watching").assertIsDisplayed()
+		composeRule.onNodeWithTag("resume-watching-603").assertIsDisplayed().performClick()
+
+		composeRule.runOnIdle {
+			assertEquals(entry, resumed)
+		}
+	}
+
+	@Test
+	fun resumeLongPressOpensMenuWithoutRemoving() {
+		var removedMovieId: Int? = null
+		val controller = MovieSearchController(
+			scope = scope,
+			catalog = FakeCatalog(),
+			debounceMs = 0,
+		)
+
+		composeRule.setContent {
+			MovieSearchScreen(
+				controller = controller,
+				onMovieSelected = {},
+				resumeWatching = listOf(watchProgressEntry()),
+				onResumeWatching = {},
+				onRemoveResumeWatching = { removedMovieId = it },
+			)
+		}
+
+		composeRule.onNodeWithTag("resume-watching-603")
+			.performSemanticsAction(SemanticsActions.OnLongClick) { it() }
+
+		composeRule.onNodeWithText("Remove from Resume Watching").assertIsDisplayed()
+		composeRule.onNodeWithText("Cancel").assertIsDisplayed()
+		composeRule.runOnIdle {
+			assertNull(removedMovieId)
+		}
+	}
+
+	@Test
+	fun startingResumeShowsImmediateFeedback() {
+		val controller = MovieSearchController(
+			scope = scope,
+			catalog = FakeCatalog(),
+			debounceMs = 0,
+		)
+
+		composeRule.setContent {
+			MovieSearchScreen(
+				controller = controller,
+				onMovieSelected = {},
+				resumeWatching = listOf(watchProgressEntry()),
+				onResumeWatching = {},
+				onRemoveResumeWatching = {},
+				startingResumeMovieId = 603,
+			)
+		}
+
+		composeRule.onNodeWithText("Starting… · OK to cancel").assertIsDisplayed()
+		composeRule.onNodeWithTag("resume-watching-starting-603").assertIsDisplayed()
 	}
 
 	@Test
@@ -103,6 +188,19 @@ class MovieSearchScreenTest {
 		composeRule.onNodeWithText("Couldn’t search movies").assertIsDisplayed()
 		composeRule.onNodeWithText("Retry").assertIsDisplayed()
 	}
+
+	private fun watchProgressEntry() = WatchProgressEntry(
+		movie = matrix(),
+		result = TorrentSearchResult(
+			id = "matrix-1080p",
+			title = "The Matrix 1999 1080p",
+			magnetUri = "magnet:?xt=urn:btih:matrix",
+			quality = "1080p",
+		),
+		positionMs = 300_000L,
+		durationMs = 600_000L,
+		updatedAtEpochMs = 123L,
+	)
 
 	private fun matrix() = Movie(
 		tmdbId = 603,

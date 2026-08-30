@@ -11,30 +11,50 @@ import sk.ziacik.androidstreamplayer.catalog.MovieSearchController
 import sk.ziacik.androidstreamplayer.playback.PlaybackController
 import sk.ziacik.androidstreamplayer.search.TorrentSearchController
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
+import sk.ziacik.androidstreamplayer.watch.WatchProgressRepository
 
 @Composable
 fun KinoApp(
 	movieSearchController: MovieSearchController,
 	torrentSearchController: TorrentSearchController,
 	playbackController: PlaybackController,
-	playerContent: @Composable (TorrentSearchResult?, () -> Unit) -> Unit,
+	watchProgressRepository: WatchProgressRepository,
+	playerContent: @Composable (Movie?, TorrentSearchResult?, Long?, () -> Unit) -> Unit,
 ) {
 	var selectedMovie by remember { mutableStateOf<Movie?>(null) }
+	var playbackMovie by remember { mutableStateOf<Movie?>(null) }
+	var resumePositionMs by remember { mutableStateOf<Long?>(null) }
 	val playbackState by playbackController.state.collectAsState()
+	val resumeWatching by watchProgressRepository.entries.collectAsState()
+	val startingResumeMovieId = startingResumeMovieId(
+		playbackStatus = playbackState.status,
+		playbackMovieId = playbackMovie?.tmdbId,
+	)
 
 	when {
 		playbackState.status == "Playing" -> {
-			playerContent(playbackState.selectedResult) {
+			playerContent(
+				playbackMovie,
+				playbackState.selectedResult,
+				resumePositionMs,
+			) {
 				playbackController.exit()
+				playbackMovie = null
+				resumePositionMs = null
 			}
 		}
 
 		selectedMovie != null -> {
+			val movie = selectedMovie!!
 			MovieDetailScreen(
-				movie = selectedMovie!!,
+				movie = movie,
 				torrentController = torrentSearchController,
 				playbackState = playbackState,
-				onPlay = playbackController::play,
+				onPlay = { result ->
+					playbackMovie = movie
+					resumePositionMs = null
+					playbackController.play(result)
+				},
 				onBack = {
 					playbackController.exit()
 					torrentSearchController.clear()
@@ -49,6 +69,19 @@ fun KinoApp(
 				onMovieSelected = { movie ->
 					selectedMovie = movie
 				},
+				resumeWatching = resumeWatching,
+				onResumeWatching = { entry ->
+					playbackMovie = entry.movie
+					resumePositionMs = entry.positionMs
+					playbackController.play(entry.result)
+				},
+				onCancelResumeWatching = {
+					playbackController.exit()
+					playbackMovie = null
+					resumePositionMs = null
+				},
+				onRemoveResumeWatching = watchProgressRepository::remove,
+				startingResumeMovieId = startingResumeMovieId,
 			)
 		}
 	}
