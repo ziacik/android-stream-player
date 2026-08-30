@@ -13,6 +13,8 @@ internal sealed interface KinoPlayerAction {
         val showOverlay: Boolean,
     ) : KinoPlayerAction
 
+    data class StartScrub(val deltaMs: Long) : KinoPlayerAction
+
     data class MoveFocus(val focus: KinoPlayerFocus) : KinoPlayerAction
 
     data class ScrubBy(val deltaMs: Long) : KinoPlayerAction
@@ -27,20 +29,18 @@ internal fun kinoHorizontalAction(
     val sign = if (direction < 0) -1L else 1L
 
     if (!overlayVisible) {
-        return KinoPlayerAction.SeekBy(
-            deltaMs = sign * 10_000L,
-            showOverlay = false,
-        )
+        return if (repeatCount > 0) {
+            KinoPlayerAction.StartScrub(sign * scrubStepMs(repeatCount))
+        } else {
+            KinoPlayerAction.SeekBy(
+                deltaMs = sign * 10_000L,
+                showOverlay = false,
+            )
+        }
     }
 
     if (focus == KinoPlayerFocus.PROGRESS) {
-        val stepMs = when {
-            repeatCount >= 50 -> 300_000L
-            repeatCount >= 20 -> 60_000L
-            repeatCount >= 6 -> 30_000L
-            else -> 10_000L
-        }
-        return KinoPlayerAction.ScrubBy(sign * stepMs)
+        return KinoPlayerAction.ScrubBy(sign * scrubStepMs(repeatCount))
     }
 
     val nextFocus = when (focus) {
@@ -75,4 +75,11 @@ internal fun kinoVerticalFocus(
     direction < 0 && focus != KinoPlayerFocus.PROGRESS -> KinoPlayerFocus.PROGRESS
     direction > 0 && focus == KinoPlayerFocus.PROGRESS -> KinoPlayerFocus.PLAY_PAUSE
     else -> focus
+}
+
+private fun scrubStepMs(repeatCount: Int): Long = when {
+    repeatCount >= 50 -> 300_000L
+    repeatCount >= 20 -> 60_000L
+    repeatCount >= 6 -> 30_000L
+    else -> 10_000L
 }

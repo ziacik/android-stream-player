@@ -17,6 +17,18 @@ class KinoPlayerNavigationTest {
     }
 
     @Test
+    fun holdingHorizontalKeyWithHiddenOverlayStartsProgressScrub() {
+        val action = kinoHorizontalAction(
+            overlayVisible = false,
+            focus = KinoPlayerFocus.PLAY_PAUSE,
+            direction = 1,
+            repeatCount = 1,
+        )
+
+        assertEquals(KinoPlayerAction.StartScrub(10_000L), action)
+    }
+
+    @Test
     fun visibleOverlayHorizontalKeyMovesBetweenButtons() {
         assertEquals(
             KinoPlayerAction.MoveFocus(KinoPlayerFocus.SEEK_BACK),
