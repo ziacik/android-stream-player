@@ -38,6 +38,13 @@ class SearchController(
         lastSearchQuery?.let(::performSearch)
     }
 
+    fun exitPlayback() {
+        _state.value = _state.value.copy(
+            selectedResult = null,
+            streamStatus = null,
+        )
+    }
+
     fun select(result: TorrentSearchResult) {
         _state.value = _state.value.copy(
             selectedResult = result,
