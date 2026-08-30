@@ -49,6 +49,18 @@ class ResumeWatchingLogicTest {
 	}
 
 	@Test
+	fun activatingResumeCardCancelsWhileItIsStarting() {
+		assertEquals(ResumeWatchingActivation.Resume, resumeWatchingActivation(isStarting = false))
+		assertEquals(ResumeWatchingActivation.Cancel, resumeWatchingActivation(isStarting = true))
+	}
+
+	@Test
+	fun longPressOptionsAreDisabledWhileResumeIsStarting() {
+		assertTrue(resumeWatchingOptionsEnabled(isStarting = false))
+		assertFalse(resumeWatchingOptionsEnabled(isStarting = true))
+	}
+
+	@Test
 	fun preparingResumeShowsStartingUntilPlaybackFailsOrStarts() {
 		assertEquals(603, startingResumeMovieId("Preparing stream…", 603))
 		assertNull(startingResumeMovieId("Stream failed", 603))
