@@ -7,6 +7,9 @@ plugins {
 }
 
 val torrServerAbi = providers.gradleProperty("torrserverAbi").orElse("arm64-v8a")
+val tmdbApiKey = providers.gradleProperty("tmdbApiKey")
+    .orElse(providers.environmentVariable("TMDB_API_KEY"))
+    .orElse("")
 val torrServerAssets = mapOf(
     "arm64-v8a" to Pair(
         "TorrServer-android-arm64",
@@ -108,6 +111,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey.get()}\"")
     }
 
     sourceSets {
@@ -123,12 +127,25 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
+
+val verifyTmdbApiKey = tasks.register("verifyTmdbApiKey") {
+    doLast {
+        require(tmdbApiKey.get().isNotBlank()) {
+            "TMDB_API_KEY/tmdbApiKey is required for release builds"
+        }
+    }
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(verifyTmdbApiKey)
 }
 
 tasks.matching { it.name == "preBuild" }.configureEach {
@@ -143,6 +160,8 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
 
