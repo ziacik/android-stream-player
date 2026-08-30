@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -66,19 +65,12 @@ private const val OSD_TIMEOUT_MS = 5_000L
 private const val SEEK_FEEDBACK_MS = 750L
 
 private val PlayerNearBlack = Color(0xFF09080B)
-private val PlayerBurgundy = Color(0xFF5B1624)
 private val PlayerBurgundySoft = Color(0xFF8B3445)
 private val PlayerChampagne = Color(0xFFF1D4A8)
 private val PlayerChampagneSoft = Color(0xFFFFE8C4)
 private val PlayerMuted = Color.White.copy(alpha = 0.66f)
 private val PlayerTrack = Color.White.copy(alpha = 0.18f)
 private val PlayerBufferedTrack = Color.White.copy(alpha = 0.34f)
-
-internal enum class KinoPlayerControl {
-    SEEK_BACK,
-    PLAY_PAUSE,
-    SEEK_FORWARD,
-}
 
 @UnstableApi
 @Composable
@@ -91,7 +83,7 @@ fun KinoPlayerScreen(
     val focusRequester = remember { FocusRequester() }
     var overlayVisible by remember { mutableStateOf(true) }
     var overlayVersion by remember { mutableIntStateOf(0) }
-    var focusedControl by remember { mutableStateOf(KinoPlayerControl.PLAY_PAUSE) }
+    var focusedFocus by remember { mutableStateOf(KinoPlayerFocus.PLAY_PAUSE) }
     var positionMs by remember { mutableLongStateOf(player.currentPosition.coerceAtLeast(0L)) }
     var durationMs by remember { mutableStateOf(player.safeDurationMs()) }
     var bufferedPositionMs by remember { mutableLongStateOf(player.bufferedPosition.coerceAtLeast(0L)) }
@@ -100,23 +92,45 @@ fun KinoPlayerScreen(
     var playbackError by remember { mutableStateOf(false) }
     var seekFeedback by remember { mutableStateOf<String?>(null) }
     var seekFeedbackVersion by remember { mutableIntStateOf(0) }
+    var scrubPositionMs by remember { mutableStateOf<Long?>(null) }
 
     fun showOverlay() {
         overlayVisible = true
         overlayVersion += 1
     }
 
-    fun seek(deltaMs: Long, control: KinoPlayerControl, feedback: String) {
+    fun showSeekFeedback(deltaMs: Long) {
+        seekFeedback = if (deltaMs < 0) "−10 s" else "+10 s"
+        seekFeedbackVersion += 1
+    }
+
+    fun seek(deltaMs: Long, showFullOverlay: Boolean) {
         val target = seekTargetMs(
-            currentMs = player.currentPosition,
+            currentMs = player.currentPosition.coerceAtLeast(0L),
             deltaMs = deltaMs,
             durationMs = player.safeDurationMs(),
         )
         player.seekTo(target)
         positionMs = target
-        focusedControl = control
-        seekFeedback = feedback
-        seekFeedbackVersion += 1
+        showSeekFeedback(deltaMs)
+        if (showFullOverlay) showOverlay()
+    }
+
+    fun commitScrub() {
+        val target = scrubPositionMs ?: return
+        player.seekTo(target)
+        positionMs = target
+        scrubPositionMs = null
+        showOverlay()
+    }
+
+    fun advanceScrub(deltaMs: Long) {
+        val base = scrubPositionMs ?: positionMs
+        scrubPositionMs = seekTargetMs(
+            currentMs = base,
+            deltaMs = deltaMs,
+            durationMs = durationMs,
+        )
         showOverlay()
     }
 
@@ -127,8 +141,17 @@ fun KinoPlayerScreen(
             player.play()
         }
         isPlaying = player.isPlaying
-        focusedControl = KinoPlayerControl.PLAY_PAUSE
+        focusedFocus = KinoPlayerFocus.PLAY_PAUSE
         showOverlay()
+    }
+
+    fun activateFocusedControl() {
+        when (focusedFocus) {
+            KinoPlayerFocus.SEEK_BACK -> seek(-SEEK_STEP_MS, showFullOverlay = true)
+            KinoPlayerFocus.PLAY_PAUSE -> togglePlayback()
+            KinoPlayerFocus.SEEK_FORWARD -> seek(SEEK_STEP_MS, showFullOverlay = true)
+            KinoPlayerFocus.PROGRESS -> commitScrub()
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -146,8 +169,21 @@ fun KinoPlayerScreen(
         }
     }
 
-    LaunchedEffect(overlayVisible, overlayVersion, isPlaying, playbackError) {
-        if (!overlayVisible || !isPlaying || playbackError) return@LaunchedEffect
+    LaunchedEffect(
+        overlayVisible,
+        overlayVersion,
+        isPlaying,
+        playbackError,
+        focusedFocus,
+    ) {
+        if (
+            !overlayVisible ||
+            !isPlaying ||
+            playbackError ||
+            focusedFocus == KinoPlayerFocus.PROGRESS
+        ) {
+            return@LaunchedEffect
+        }
         delay(OSD_TIMEOUT_MS)
         overlayVisible = false
     }
@@ -181,6 +217,7 @@ fun KinoPlayerScreen(
 
     BackHandler {
         if (overlayVisible) {
+            scrubPositionMs = null
             overlayVisible = false
         } else {
             player.stop()
@@ -194,39 +231,114 @@ fun KinoPlayerScreen(
             .background(Color.Black)
             .focusRequester(focusRequester)
             .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
+                val keyCode = event.nativeKeyEvent.keyCode
+                val isDown = event.type == KeyEventType.KeyDown
+                val isUp = event.type == KeyEventType.KeyUp
 
-                when (event.nativeKeyEvent.keyCode) {
+                when (keyCode) {
                     KeyEvent.KEYCODE_DPAD_LEFT,
-                    KeyEvent.KEYCODE_MEDIA_REWIND,
+                    KeyEvent.KEYCODE_DPAD_RIGHT,
                     -> {
-                        seek(-SEEK_STEP_MS, KinoPlayerControl.SEEK_BACK, "−10 s")
-                        true
+                        val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1
+
+                        if (!overlayVisible) {
+                            if (isUp) {
+                                val action = kinoHorizontalAction(
+                                    overlayVisible = false,
+                                    focus = focusedFocus,
+                                    direction = direction,
+                                    repeatCount = 0,
+                                )
+                                if (action is KinoPlayerAction.SeekBy) {
+                                    seek(action.deltaMs, showFullOverlay = action.showOverlay)
+                                }
+                            }
+                            true
+                        } else if (focusedFocus == KinoPlayerFocus.PROGRESS) {
+                            if (isDown) {
+                                val action = kinoHorizontalAction(
+                                    overlayVisible = true,
+                                    focus = focusedFocus,
+                                    direction = direction,
+                                    repeatCount = event.nativeKeyEvent.repeatCount,
+                                )
+                                if (action is KinoPlayerAction.ScrubBy) {
+                                    advanceScrub(action.deltaMs)
+                                }
+                            } else if (isUp) {
+                                commitScrub()
+                            }
+                            true
+                        } else {
+                            if (isUp) {
+                                val action = kinoHorizontalAction(
+                                    overlayVisible = true,
+                                    focus = focusedFocus,
+                                    direction = direction,
+                                    repeatCount = 0,
+                                )
+                                if (action is KinoPlayerAction.MoveFocus) {
+                                    focusedFocus = action.focus
+                                    showOverlay()
+                                }
+                            }
+                            true
+                        }
                     }
 
-                    KeyEvent.KEYCODE_DPAD_RIGHT,
+                    KeyEvent.KEYCODE_MEDIA_REWIND,
                     KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
                     -> {
-                        seek(SEEK_STEP_MS, KinoPlayerControl.SEEK_FORWARD, "+10 s")
-                        true
-                    }
-
-                    KeyEvent.KEYCODE_DPAD_CENTER,
-                    KeyEvent.KEYCODE_ENTER,
-                    KeyEvent.KEYCODE_NUMPAD_ENTER,
-                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-                    KeyEvent.KEYCODE_MEDIA_PLAY,
-                    KeyEvent.KEYCODE_MEDIA_PAUSE,
-                    -> {
-                        togglePlayback()
+                        if (isUp) {
+                            val delta = if (keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
+                                -SEEK_STEP_MS
+                            } else {
+                                SEEK_STEP_MS
+                            }
+                            seek(delta, showFullOverlay = overlayVisible)
+                        }
                         true
                     }
 
                     KeyEvent.KEYCODE_DPAD_UP,
                     KeyEvent.KEYCODE_DPAD_DOWN,
                     -> {
-                        focusedControl = KinoPlayerControl.PLAY_PAUSE
-                        showOverlay()
+                        if (isUp) {
+                            if (!overlayVisible) {
+                                focusedFocus = KinoPlayerFocus.PLAY_PAUSE
+                                showOverlay()
+                            } else {
+                                val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) -1 else 1
+                                val nextFocus = kinoVerticalFocus(focusedFocus, direction)
+                                if (nextFocus != focusedFocus) {
+                                    scrubPositionMs = null
+                                    focusedFocus = nextFocus
+                                }
+                                showOverlay()
+                            }
+                        }
+                        true
+                    }
+
+                    KeyEvent.KEYCODE_DPAD_CENTER,
+                    KeyEvent.KEYCODE_ENTER,
+                    KeyEvent.KEYCODE_NUMPAD_ENTER,
+                    -> {
+                        if (isUp) {
+                            if (!overlayVisible) {
+                                togglePlayback()
+                            } else {
+                                activateFocusedControl()
+                            }
+                        }
+                        true
+                    }
+
+                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                    KeyEvent.KEYCODE_MEDIA_PLAY,
+                    KeyEvent.KEYCODE_MEDIA_PAUSE,
+                    -> {
+                        if (isUp) togglePlayback()
                         true
                     }
 
@@ -262,7 +374,8 @@ fun KinoPlayerScreen(
                 durationMs = durationMs,
                 bufferedPositionMs = bufferedPositionMs,
                 isPlaying = isPlaying,
-                focusedControl = focusedControl,
+                focusedFocus = focusedFocus,
+                scrubPositionMs = scrubPositionMs,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -279,18 +392,30 @@ fun KinoPlayerScreen(
         }
 
         seekFeedback?.let { feedback ->
-            Text(
-                text = feedback,
+            val backward = feedback.startsWith("−")
+            Column(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .background(PlayerNearBlack.copy(alpha = 0.82f), RoundedCornerShape(18.dp))
-                    .border(1.dp, PlayerChampagne.copy(alpha = 0.34f), RoundedCornerShape(18.dp))
-                    .padding(horizontal = 24.dp, vertical = 12.dp)
+                    .align(if (backward) Alignment.CenterStart else Alignment.CenterEnd)
+                    .padding(horizontal = 74.dp)
+                    .background(PlayerNearBlack.copy(alpha = 0.78f), CircleShape)
+                    .border(1.dp, PlayerChampagne.copy(alpha = 0.30f), CircleShape)
+                    .padding(horizontal = 24.dp, vertical = 17.dp)
                     .testTag("player-seek-feedback"),
-                color = PlayerChampagneSoft,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-            )
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = if (backward) "↶" else "↷",
+                    color = PlayerChampagneSoft,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = feedback,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
 
         if (playbackError) {
@@ -328,9 +453,12 @@ internal fun KinoPlayerOverlay(
     durationMs: Long?,
     bufferedPositionMs: Long,
     isPlaying: Boolean,
-    focusedControl: KinoPlayerControl,
+    focusedFocus: KinoPlayerFocus,
+    scrubPositionMs: Long?,
     modifier: Modifier = Modifier,
 ) {
+    val displayPositionMs = scrubPositionMs ?: positionMs
+
     Box(
         modifier = modifier
             .background(
@@ -387,20 +515,41 @@ internal fun KinoPlayerOverlay(
                 quality?.let { PlayerQualityBadge(it) }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
+
+            if (focusedFocus == KinoPlayerFocus.PROGRESS && scrubPositionMs != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = formatPlaybackTime(scrubPositionMs),
+                        modifier = Modifier
+                            .background(PlayerChampagne, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 18.dp, vertical = 7.dp)
+                            .testTag("player-scrub-time"),
+                        color = PlayerNearBlack,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+
             PlayerTimeline(
-                positionMs = positionMs,
+                positionMs = displayPositionMs,
                 durationMs = durationMs,
                 bufferedPositionMs = bufferedPositionMs,
+                focused = focusedFocus == KinoPlayerFocus.PROGRESS,
             )
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = formatPlaybackTime(positionMs),
+                    text = formatPlaybackTime(displayPositionMs),
                     color = PlayerChampagneSoft,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -417,18 +566,18 @@ internal fun KinoPlayerOverlay(
                 ) {
                     PlayerControlButton(
                         text = "−10",
-                        focused = focusedControl == KinoPlayerControl.SEEK_BACK,
+                        focused = focusedFocus == KinoPlayerFocus.SEEK_BACK,
                         modifier = Modifier.testTag("player-seek-back"),
                     )
                     PlayerControlButton(
                         text = if (isPlaying) "Ⅱ" else "▶",
-                        focused = focusedControl == KinoPlayerControl.PLAY_PAUSE,
+                        focused = focusedFocus == KinoPlayerFocus.PLAY_PAUSE,
                         emphasized = true,
                         modifier = Modifier.testTag("player-play-pause"),
                     )
                     PlayerControlButton(
                         text = "+10",
-                        focused = focusedControl == KinoPlayerControl.SEEK_FORWARD,
+                        focused = focusedFocus == KinoPlayerFocus.SEEK_FORWARD,
                         modifier = Modifier.testTag("player-seek-forward"),
                     )
                 }
@@ -456,6 +605,7 @@ private fun PlayerTimeline(
     positionMs: Long,
     durationMs: Long?,
     bufferedPositionMs: Long,
+    focused: Boolean,
 ) {
     val duration = durationMs?.takeIf { it > 0L }
     val playedProgress = duration
@@ -464,18 +614,34 @@ private fun PlayerTimeline(
     val bufferedProgress = duration
         ?.let { (bufferedPositionMs.toFloat() / it.toFloat()).coerceIn(0f, 1f) }
         ?: 0f
+    val trackHeight = if (focused) 8.dp else 5.dp
+    val markerSize = if (focused) 18.dp else 12.dp
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(16.dp)
+            .height(if (focused) 24.dp else 16.dp)
+            .then(
+                if (focused) {
+                    Modifier
+                        .background(PlayerChampagne.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+                        .border(
+                            1.dp,
+                            PlayerChampagne.copy(alpha = 0.30f),
+                            RoundedCornerShape(12.dp),
+                        )
+                        .padding(horizontal = 8.dp)
+                } else {
+                    Modifier
+                },
+            )
             .testTag("player-progress"),
         contentAlignment = Alignment.CenterStart,
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(5.dp)
+                .height(trackHeight)
                 .clip(CircleShape)
                 .background(PlayerTrack),
         )
@@ -483,7 +649,7 @@ private fun PlayerTimeline(
             Box(
                 modifier = Modifier
                     .fillMaxWidth(bufferedProgress)
-                    .height(5.dp)
+                    .height(trackHeight)
                     .clip(CircleShape)
                     .background(PlayerBufferedTrack),
             )
@@ -492,7 +658,7 @@ private fun PlayerTimeline(
             Box(
                 modifier = Modifier
                     .fillMaxWidth(playedProgress)
-                    .height(5.dp)
+                    .height(trackHeight)
                     .clip(CircleShape)
                     .background(
                         Brush.horizontalGradient(
@@ -501,13 +667,12 @@ private fun PlayerTimeline(
                     ),
             )
         }
-        val markerSize = 12.dp
         val markerOffset = (maxWidth - markerSize) * playedProgress
         Box(
             modifier = Modifier
                 .padding(start = markerOffset)
                 .size(markerSize)
-                .shadow(5.dp, CircleShape)
+                .shadow(if (focused) 10.dp else 5.dp, CircleShape)
                 .background(PlayerChampagneSoft, CircleShape),
         )
     }
