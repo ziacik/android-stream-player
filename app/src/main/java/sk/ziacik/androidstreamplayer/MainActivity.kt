@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import sk.ziacik.androidstreamplayer.catalog.MovieBrowseController
 import sk.ziacik.androidstreamplayer.catalog.MovieSearchController
 import sk.ziacik.androidstreamplayer.catalog.TmdbMovieCatalog
 import sk.ziacik.androidstreamplayer.playback.PlaybackController
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
 	private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 	private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+	private lateinit var movieBrowseController: MovieBrowseController
 	private lateinit var movieSearchController: MovieSearchController
 	private lateinit var torrentSearchController: TorrentSearchController
 	private lateinit var playbackController: PlaybackController
@@ -69,6 +71,10 @@ class MainActivity : ComponentActivity() {
 		val torrentStreamer = TorrServerTorrentStreamer(torrentRuntime)
 		val movieCatalog = TmdbMovieCatalog(BuildConfig.TMDB_API_KEY)
 
+		movieBrowseController = MovieBrowseController(
+			scope = appScope,
+			loadTrending = movieCatalog::trending,
+		)
 		movieSearchController = MovieSearchController(
 			scope = appScope,
 			catalog = movieCatalog,
@@ -90,6 +96,7 @@ class MainActivity : ComponentActivity() {
 		setContent {
 			AndroidStreamPlayerTheme {
 				KinoApp(
+					movieBrowseController = movieBrowseController,
 					movieSearchController = movieSearchController,
 					torrentSearchController = torrentSearchController,
 					playbackController = playbackController,
