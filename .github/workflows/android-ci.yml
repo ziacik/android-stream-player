@@ -110,4 +110,4 @@ jobs:
           arch: x86_64
           profile: tv_1080p
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=sk.ziacik.androidstreamplayer.ui.KinoAppTest#dpadCanMoveDownAgainAfterReturningFromScrolledTrendingRow --stacktrace
+          script: ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=sk.ziacik.androidstreamplayer.ui.KinoAppTest#backFromTrendingDetailRestoresFocusedCard --stacktrace
