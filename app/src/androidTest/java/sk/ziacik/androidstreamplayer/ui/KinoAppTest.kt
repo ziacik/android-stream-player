@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
+import androidx.test.espresso.Espresso.pressBack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -201,6 +202,63 @@ class KinoAppTest {
 	}
 
 	@Test
+	fun backFromTrendingDetailRestoresFocusedCard() {
+		val trending = (0..13).map(::dashboardMovie)
+		val movieSearchController = MovieSearchController(
+			scope = scope,
+			catalog = FakeCatalog,
+			debounceMs = 0,
+		)
+		val torrentSearchController = TorrentSearchController(
+			scope = scope,
+			catalog = FakeCatalog,
+			provider = TorrentSearchProvider { request -> listOf(torrent(request)) },
+		)
+		val playbackController = PlaybackController(
+			scope = scope,
+			streamer = TorrentStreamer { TorrentSource("http://127.0.0.1/movie.mkv") },
+			onStreamReady = {},
+		)
+
+		composeRule.setContent {
+			KinoApp(
+				movieBrowseController = movieBrowseController(trending),
+				movieSearchController = movieSearchController,
+				torrentSearchController = torrentSearchController,
+				playbackController = playbackController,
+				watchProgressRepository = watchProgressRepository(),
+				playerContent = { _, _, _, _ -> Box(Modifier.testTag("kino-player")) },
+			)
+		}
+
+		val targetIndex = 12
+		composeRule.waitUntil(timeoutMillis = 5_000) {
+			composeRule.onAllNodes(hasTestTag("home-trending-${trending.first().tmdbId}"))
+				.fetchSemanticsNodes()
+				.isNotEmpty()
+		}
+		var focusedCard = composeRule.onNodeWithTag("home-trending-${trending.first().tmdbId}")
+		focusedCard.requestFocus().assertIsFocused()
+		for (index in 1..targetIndex) {
+			focusedCard.performKeyInput { pressKey(Key.DirectionRight) }
+			focusedCard = composeRule.onNodeWithTag("home-trending-${trending[index].tmdbId}")
+			focusedCard.assertIsFocused()
+		}
+
+		focusedCard.performClick()
+		composeRule.waitUntil(timeoutMillis = 5_000) {
+			composeRule.onAllNodes(hasTestTag("movie-detail")).fetchSemanticsNodes().isNotEmpty()
+		}
+		pressBack()
+		composeRule.waitUntil(timeoutMillis = 5_000) {
+			composeRule.onAllNodes(hasTestTag("home-dashboard")).fetchSemanticsNodes().isNotEmpty()
+		}
+
+		composeRule.onNodeWithTag("home-trending-${trending[targetIndex].tmdbId}")
+			.assertIsFocused()
+	}
+
+	@Test
 	fun resumeWatchingStartsStoredTorrentAtStoredPositionWithoutSearchingAgain() {
 		val entry = WatchProgressEntry(
 			movie = matrix(),
@@ -317,6 +375,17 @@ class KinoAppTest {
 		releaseYear = 2014,
 		overview = "Explorers travel through a wormhole in space.",
 		voteAverage = 8.5,
+		posterPath = null,
+		backdropPath = null,
+	)
+
+	private fun dashboardMovie(index: Int) = Movie(
+		tmdbId = 10_000 + index,
+		title = "Dashboard Movie $index",
+		originalTitle = "Dashboard Movie $index",
+		releaseYear = 2020 + index % 7,
+		overview = "Dashboard movie used for focus restoration testing.",
+		voteAverage = 7.0,
 		posterPath = null,
 		backdropPath = null,
 	)
