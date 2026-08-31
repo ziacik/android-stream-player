@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -70,6 +71,7 @@ fun HomeScreen(
 	startingResumeMovieId: Int?,
 	onSearch: () -> Unit,
 	modifier: Modifier = Modifier,
+	homeState: HomeScreenState = rememberHomeScreenState(),
 ) {
 	val state by controller.state.collectAsState()
 	val searchRequester = remember { FocusRequester() }
@@ -84,14 +86,17 @@ fun HomeScreen(
 	val firstResumeRequester = resumeWatching.firstOrNull()?.let { resumeRequesters[it.movie.tmdbId] }
 	val firstTrendingRequester = state.trending.firstOrNull()?.let { trendingRequesters[it.tmdbId] }
 	val firstContentRequester = firstResumeRequester ?: firstTrendingRequester
-	var lastResumeMovieId by remember(resumeIds) {
-		mutableStateOf(resumeWatching.firstOrNull()?.movie?.tmdbId)
+	val resumeDestination = homeState.lastResumeMovieId?.let(resumeRequesters::get) ?: firstResumeRequester
+	val trendingDestination = homeState.lastTrendingMovieId?.let(trendingRequesters::get) ?: firstTrendingRequester
+	val restoredFocusRequester = when (val target = homeState.focusedTarget) {
+		HomeFocusTarget.Search -> searchRequester
+		is HomeFocusTarget.Resume -> resumeRequesters[target.movieId]
+		is HomeFocusTarget.Trending -> trendingRequesters[target.movieId]
+		null -> null
 	}
-	var lastTrendingMovieId by remember(trendingIds) {
-		mutableStateOf(state.trending.firstOrNull()?.tmdbId)
-	}
-	val resumeDestination = lastResumeMovieId?.let(resumeRequesters::get) ?: firstResumeRequester
-	val trendingDestination = lastTrendingMovieId?.let(trendingRequesters::get) ?: firstTrendingRequester
+	val waitingForTrendingRestore = homeState.focusedTarget is HomeFocusTarget.Trending &&
+		restoredFocusRequester == null &&
+		state.isLoading
 	var initialFocusHandled by remember { mutableStateOf(false) }
 	var resumeActionEntry by remember { mutableStateOf<WatchProgressEntry?>(null) }
 
@@ -102,14 +107,31 @@ fun HomeScreen(
 		onCancelResumeWatching()
 	}
 
-	LaunchedEffect(firstContentRequester, state.isLoading) {
+	LaunchedEffect(
+		restoredFocusRequester,
+		firstContentRequester,
+		state.isLoading,
+		homeState.focusedTarget,
+	) {
 		if (initialFocusHandled) return@LaunchedEffect
-		if (firstContentRequester != null) {
-			firstContentRequester.requestFocus()
-			initialFocusHandled = true
-		} else if (!state.isLoading) {
-			searchRequester.requestFocus()
-			initialFocusHandled = true
+
+		when {
+			restoredFocusRequester != null -> {
+				restoredFocusRequester.requestFocus()
+				initialFocusHandled = true
+			}
+
+			waitingForTrendingRestore -> Unit
+
+			firstContentRequester != null -> {
+				firstContentRequester.requestFocus()
+				initialFocusHandled = true
+			}
+
+			!state.isLoading -> {
+				searchRequester.requestFocus()
+				initialFocusHandled = true
+			}
 		}
 	}
 
@@ -141,11 +163,16 @@ fun HomeScreen(
 				HomeHeader(
 					searchRequester = searchRequester,
 					downFocusRequester = firstContentRequester,
-					onSearch = onSearch,
+					onFocused = { homeState.focusedTarget = HomeFocusTarget.Search },
+					onSearch = {
+						homeState.focusedTarget = HomeFocusTarget.Search
+						onSearch()
+					},
 				)
 				Spacer(Modifier.height(24.dp))
 
 				LazyColumn(
+					state = homeState.contentListState,
 					modifier = Modifier
 						.fillMaxWidth()
 						.weight(1f),
@@ -156,12 +183,16 @@ fun HomeScreen(
 						item(key = "resume-watching") {
 							HomeResumeWatchingRow(
 								entries = resumeWatching,
+								listState = homeState.resumeRowState,
 								focusRequesters = resumeRequesters,
 								onMoveUp = { searchRequester.requestFocus() },
 								onMoveDown = trendingDestination?.let { destination ->
 									{ destination.requestFocus() }
 								},
-								onFocused = { lastResumeMovieId = it.movie.tmdbId },
+								onFocused = { entry ->
+									homeState.lastResumeMovieId = entry.movie.tmdbId
+									homeState.focusedTarget = HomeFocusTarget.Resume(entry.movie.tmdbId)
+								},
 								onResume = onResumeWatching,
 								onCancelStarting = onCancelResumeWatching,
 								onOpenActions = { resumeActionEntry = it },
@@ -173,16 +204,24 @@ fun HomeScreen(
 					item(key = "trending") {
 						HomeTrendingRow(
 							movies = state.trending,
+							listState = homeState.trendingRowState,
 							focusRequesters = trendingRequesters,
 							onMoveUp = {
 								(resumeDestination ?: searchRequester).requestFocus()
 							},
 							onMoveDown = null,
-							onFocused = { lastTrendingMovieId = it.tmdbId },
+							onFocused = { movie ->
+								homeState.lastTrendingMovieId = movie.tmdbId
+								homeState.focusedTarget = HomeFocusTarget.Trending(movie.tmdbId)
+							},
 							isLoading = state.isLoading,
 							errorMessage = state.errorMessage,
 							onRetry = controller::retry,
-							onMovieSelected = onMovieSelected,
+							onMovieSelected = { movie ->
+								homeState.lastTrendingMovieId = movie.tmdbId
+								homeState.focusedTarget = HomeFocusTarget.Trending(movie.tmdbId)
+								onMovieSelected(movie)
+							},
 						)
 					}
 				}
@@ -206,6 +245,7 @@ fun HomeScreen(
 private fun HomeHeader(
 	searchRequester: FocusRequester,
 	downFocusRequester: FocusRequester?,
+	onFocused: () -> Unit,
 	onSearch: () -> Unit,
 ) {
 	Row(
@@ -236,6 +276,7 @@ private fun HomeHeader(
 			modifier = Modifier
 				.testTag("home-search-nav")
 				.focusRequester(searchRequester)
+				.onFocusChanged { if (it.isFocused) onFocused() }
 				.focusProperties {
 					down = downFocusRequester ?: FocusRequester.Default
 				},
@@ -248,6 +289,7 @@ private fun HomeHeader(
 @Composable
 private fun HomeTrendingRow(
 	movies: List<Movie>,
+	listState: LazyListState,
 	focusRequesters: Map<Int, FocusRequester>,
 	onMoveUp: () -> Unit,
 	onMoveDown: (() -> Unit)?,
@@ -268,6 +310,7 @@ private fun HomeTrendingRow(
 		when {
 			movies.isNotEmpty() -> {
 				LazyRow(
+					state = listState,
 					modifier = Modifier.verticalFocusNavigation(
 						onMoveUp = onMoveUp,
 						onMoveDown = onMoveDown,
@@ -325,6 +368,7 @@ private fun HomeTrendingRow(
 @Composable
 private fun HomeResumeWatchingRow(
 	entries: List<WatchProgressEntry>,
+	listState: LazyListState,
 	focusRequesters: Map<Int, FocusRequester>,
 	onMoveUp: () -> Unit,
 	onMoveDown: (() -> Unit)?,
@@ -342,6 +386,7 @@ private fun HomeResumeWatchingRow(
 			color = MaterialTheme.colorScheme.onBackground,
 		)
 		LazyRow(
+			state = listState,
 			modifier = Modifier.verticalFocusNavigation(
 				onMoveUp = onMoveUp,
 				onMoveDown = onMoveDown,
