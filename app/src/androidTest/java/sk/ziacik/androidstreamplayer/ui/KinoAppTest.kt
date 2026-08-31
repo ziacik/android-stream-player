@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.requestFocus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -145,6 +146,7 @@ class KinoAppTest {
 			composeRule.onAllNodes(hasTestTag("home-trending-1054867")).fetchSemanticsNodes().isNotEmpty()
 		}
 		composeRule.onNodeWithTag("resume-watching-603")
+			.requestFocus()
 			.assertIsFocused()
 			.performKeyInput { pressKey(Key.DirectionDown) }
 		composeRule.onNodeWithTag("home-trending-1054867").assertIsFocused()
@@ -183,6 +185,7 @@ class KinoAppTest {
 		}
 
 		composeRule.onNodeWithTag("resume-watching-603")
+			.requestFocus()
 			.assertIsFocused()
 			.performKeyInput { pressKey(Key.DirectionDown) }
 		composeRule.onNodeWithTag("home-trending-1054867")
