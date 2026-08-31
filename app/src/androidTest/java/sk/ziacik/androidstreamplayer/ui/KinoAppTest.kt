@@ -233,13 +233,17 @@ class KinoAppTest {
 		}
 
 		val targetIndex = 12
+		val firstCard = composeRule.onNodeWithTag("home-trending-${trending.first().tmdbId}")
 		composeRule.waitUntil(timeoutMillis = 5_000) {
-			composeRule.onAllNodes(hasTestTag("home-trending-${trending.first().tmdbId}"))
-				.fetchSemanticsNodes()
-				.isNotEmpty()
+			try {
+				firstCard.assertIsFocused()
+				true
+			} catch (_: AssertionError) {
+				false
+			}
 		}
-		var focusedCard = composeRule.onNodeWithTag("home-trending-${trending.first().tmdbId}")
-		focusedCard.requestFocus().assertIsFocused()
+
+		var focusedCard = firstCard
 		for (index in 1..targetIndex) {
 			focusedCard.performKeyInput { pressKey(Key.DirectionRight) }
 			focusedCard = composeRule.onNodeWithTag("home-trending-${trending[index].tmdbId}")
