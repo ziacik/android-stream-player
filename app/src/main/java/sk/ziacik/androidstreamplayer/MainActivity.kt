@@ -1,5 +1,6 @@
 package sk.ziacik.androidstreamplayer
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import androidx.activity.ComponentActivity
@@ -119,10 +120,13 @@ class MainActivity : ComponentActivity() {
 			}
 		}
 
-		intent.getStringExtra(EXTRA_MAGNET)
-			?.trim()
-			?.takeIf { it.isNotEmpty() }
-			?.let(::startMagnet)
+		handleIntent(intent)
+	}
+
+	override fun onNewIntent(intent: Intent) {
+		super.onNewIntent(intent)
+		setIntent(intent)
+		handleIntent(intent)
 	}
 
 	override fun onStop() {
@@ -154,6 +158,13 @@ class MainActivity : ComponentActivity() {
 		}
 
 		super.onDestroy()
+	}
+
+	private fun handleIntent(intent: Intent) {
+		intent.getStringExtra(EXTRA_MAGNET)
+			?.trim()
+			?.takeIf { it.isNotEmpty() }
+			?.let(::startMagnet)
 	}
 
 	private fun startMagnet(magnet: String) {
