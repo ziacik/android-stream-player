@@ -268,6 +268,10 @@ private fun HomeTrendingRow(
 		when {
 			movies.isNotEmpty() -> {
 				LazyRow(
+					modifier = Modifier.verticalFocusNavigation(
+						onMoveUp = onMoveUp,
+						onMoveDown = onMoveDown,
+					),
 					horizontalArrangement = Arrangement.spacedBy(18.dp),
 					contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
 				) {
@@ -281,12 +285,7 @@ private fun HomeTrendingRow(
 							focusRequester = focusRequesters.getValue(movie.tmdbId),
 							onFocused = { onFocused(movie) },
 							testTag = "home-trending-${movie.tmdbId}",
-							modifier = Modifier
-								.width(HOME_POSTER_WIDTH)
-								.verticalFocusNavigation(
-									onMoveUp = onMoveUp,
-									onMoveDown = onMoveDown,
-								),
+							modifier = Modifier.width(HOME_POSTER_WIDTH),
 						)
 					}
 				}
@@ -343,6 +342,10 @@ private fun HomeResumeWatchingRow(
 			color = MaterialTheme.colorScheme.onBackground,
 		)
 		LazyRow(
+			modifier = Modifier.verticalFocusNavigation(
+				onMoveUp = onMoveUp,
+				onMoveDown = onMoveDown,
+			),
 			horizontalArrangement = Arrangement.spacedBy(18.dp),
 			contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
 		) {
@@ -353,8 +356,6 @@ private fun HomeResumeWatchingRow(
 				HomeResumeWatchingCard(
 					entry = entry,
 					focusRequester = focusRequesters.getValue(entry.movie.tmdbId),
-					onMoveUp = onMoveUp,
-					onMoveDown = onMoveDown,
 					onFocused = { onFocused(entry) },
 					onResume = { onResume(entry) },
 					onCancelStarting = onCancelStarting,
@@ -370,8 +371,6 @@ private fun HomeResumeWatchingRow(
 private fun HomeResumeWatchingCard(
 	entry: WatchProgressEntry,
 	focusRequester: FocusRequester,
-	onMoveUp: () -> Unit,
-	onMoveDown: (() -> Unit)?,
 	onFocused: () -> Unit,
 	onResume: () -> Unit,
 	onCancelStarting: () -> Unit,
@@ -437,12 +436,7 @@ private fun HomeResumeWatchingCard(
 			focusRequester = focusRequester,
 			onFocused = onFocused,
 			testTag = "resume-watching-${entry.movie.tmdbId}",
-			modifier = Modifier
-				.fillMaxWidth()
-				.verticalFocusNavigation(
-					onMoveUp = onMoveUp,
-					onMoveDown = onMoveDown,
-				),
+			modifier = Modifier.fillMaxWidth(),
 		)
 
 		LinearProgressIndicator(
