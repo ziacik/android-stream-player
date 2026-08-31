@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -99,9 +100,12 @@ fun HomeScreen(
 		state.isLoading
 	var initialFocusHandled by remember { mutableStateOf(false) }
 	var resumeActionEntry by remember { mutableStateOf<WatchProgressEntry?>(null) }
+	var pendingResumeRemovalId by remember { mutableStateOf<Int?>(null) }
 
 	BackHandler(enabled = resumeActionEntry != null) {
-		resumeActionEntry = null
+		if (pendingResumeRemovalId == null) {
+			resumeActionEntry = null
+		}
 	}
 	BackHandler(enabled = resumeActionEntry == null && startingResumeMovieId != null) {
 		onCancelResumeWatching()
@@ -136,21 +140,101 @@ fun HomeScreen(
 	}
 
 	LaunchedEffect(
+		pendingResumeRemovalId,
+		resumeIds,
+		trendingIds,
+		state.isLoading,
+	) {
+		val removedMovieId = pendingResumeRemovalId ?: return@LaunchedEffect
+		if (removedMovieId in resumeIds) return@LaunchedEffect
+
+		val remainingResumeId = homeState.lastResumeMovieId
+			?.takeIf { it != removedMovieId && it in resumeIds }
+			?: resumeIds.firstOrNull()
+		val destinationTrendingId = homeState.lastTrendingMovieId
+			?.takeIf { it in trendingIds }
+			?: trendingIds.firstOrNull()
+
+		val destinationTarget: HomeFocusTarget
+		val destinationRequester: FocusRequester
+		when {
+			remainingResumeId != null -> {
+			destinationTarget = HomeFocusTarget.Resume(remainingResumeId)
+			destinationRequester = resumeRequesters.getValue(remainingResumeId)
+		}
+
+			destinationTrendingId != null -> {
+			destinationTarget = HomeFocusTarget.Trending(destinationTrendingId)
+			destinationRequester = trendingRequesters.getValue(destinationTrendingId)
+		}
+
+			!state.isLoading -> {
+			destinationTarget = HomeFocusTarget.Search
+			destinationRequester = searchRequester
+		}
+
+			else -> return@LaunchedEffect
+		}
+
+		// Keep the actions overlay alive while the removed row leaves the lazy layout.
+		// Otherwise disposing the currently focused Remove button can clear the focus
+		// request that targets the newly exposed row underneath it.
+		homeState.contentListState.scrollToItem(0)
+		withFrameNanos { }
+
+		homeState.lastResumeMovieId = remainingResumeId
+		when (destinationTarget) {
+			HomeFocusTarget.Search -> homeState.focusedTarget = HomeFocusTarget.Search
+			is HomeFocusTarget.Resume -> homeState.focusedTarget = destinationTarget
+			is HomeFocusTarget.Trending -> {
+				homeState.lastTrendingMovieId = destinationTarget.movieId
+				homeState.focusedTarget = destinationTarget
+			}
+		}
+		destinationRequester.requestFocus()
+
+		// Let Compose commit the new focus owner before removing the old focused subtree.
+		withFrameNanos { }
+		resumeActionEntry = null
+		pendingResumeRemovalId = null
+	}
+
+	LaunchedEffect(
 		resumeIds,
 		trendingIds,
 		resumeActionEntry,
+		pendingResumeRemovalId,
 		state.isLoading,
 	) {
-		if (resumeActionEntry != null) return@LaunchedEffect
+		if (resumeActionEntry != null || pendingResumeRemovalId != null) return@LaunchedEffect
 
 		when (val target = homeState.focusedTarget) {
 			is HomeFocusTarget.Resume -> {
 				if (target.movieId !in resumeIds) {
 					homeState.lastResumeMovieId = null
+					homeState.contentListState.scrollToItem(0)
+					withFrameNanos { }
 					when {
-						firstResumeRequester != null -> firstResumeRequester.requestFocus()
-						trendingDestination != null -> trendingDestination.requestFocus()
-						!state.isLoading -> searchRequester.requestFocus()
+						firstResumeRequester != null -> {
+							val movieId = resumeIds.first()
+							homeState.lastResumeMovieId = movieId
+							homeState.focusedTarget = HomeFocusTarget.Resume(movieId)
+							firstResumeRequester.requestFocus()
+						}
+
+						trendingDestination != null -> {
+							val movieId = homeState.lastTrendingMovieId
+								?.takeIf { it in trendingIds }
+								?: trendingIds.first()
+							homeState.lastTrendingMovieId = movieId
+							homeState.focusedTarget = HomeFocusTarget.Trending(movieId)
+							trendingDestination.requestFocus()
+						}
+
+						!state.isLoading -> {
+							homeState.focusedTarget = HomeFocusTarget.Search
+							searchRequester.requestFocus()
+						}
 					}
 				}
 			}
@@ -158,7 +242,28 @@ fun HomeScreen(
 			is HomeFocusTarget.Trending -> {
 				if (target.movieId !in trendingIds && !state.isLoading) {
 					homeState.lastTrendingMovieId = null
-					(firstTrendingRequester ?: firstResumeRequester ?: searchRequester).requestFocus()
+					homeState.contentListState.scrollToItem(0)
+					withFrameNanos { }
+					when {
+						firstTrendingRequester != null -> {
+							val movieId = trendingIds.first()
+							homeState.lastTrendingMovieId = movieId
+							homeState.focusedTarget = HomeFocusTarget.Trending(movieId)
+							firstTrendingRequester.requestFocus()
+						}
+
+						firstResumeRequester != null -> {
+							val movieId = resumeIds.first()
+							homeState.lastResumeMovieId = movieId
+							homeState.focusedTarget = HomeFocusTarget.Resume(movieId)
+							firstResumeRequester.requestFocus()
+						}
+
+						else -> {
+							homeState.focusedTarget = HomeFocusTarget.Search
+							searchRequester.requestFocus()
+						}
+					}
 				}
 			}
 
@@ -262,10 +367,16 @@ fun HomeScreen(
 				HomeResumeWatchingActions(
 					entry = entry,
 					onRemove = {
-						onRemoveResumeWatching(entry.movie.tmdbId)
-						resumeActionEntry = null
+						if (pendingResumeRemovalId == null) {
+							pendingResumeRemovalId = entry.movie.tmdbId
+							onRemoveResumeWatching(entry.movie.tmdbId)
+						}
 					},
-					onCancel = { resumeActionEntry = null },
+					onCancel = {
+						if (pendingResumeRemovalId == null) {
+							resumeActionEntry = null
+						}
+					},
 				)
 			}
 		}
