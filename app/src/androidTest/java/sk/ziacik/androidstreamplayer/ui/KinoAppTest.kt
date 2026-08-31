@@ -118,23 +118,10 @@ class KinoAppTest {
 
 	@Test
 	fun dpadDownMovesFromResumeWatchingToTrending() {
-		val entry = WatchProgressEntry(
-			movie = matrix(),
-			result = TorrentSearchResult(
-				id = "stored-hit",
-				title = "The.Matrix.1999.1080p.Stored",
-				magnetUri = "magnet:?xt=urn:btih:stored-matrix",
-				quality = "1080p",
-			),
-			positionMs = 300_000L,
-			durationMs = 600_000L,
-			updatedAtEpochMs = 123L,
-		)
-
 		composeRule.setContent {
 			HomeScreen(
 				controller = movieBrowseController(listOf(odyssey())),
-				resumeWatching = listOf(entry),
+				resumeWatching = listOf(resumeEntry()),
 				onMovieSelected = {},
 				onResumeWatching = {},
 				onCancelResumeWatching = {},
@@ -156,23 +143,10 @@ class KinoAppTest {
 
 	@Test
 	fun dpadCanMoveDownAgainAfterReturningFromScrolledTrendingRow() {
-		val entry = WatchProgressEntry(
-			movie = matrix(),
-			result = TorrentSearchResult(
-				id = "stored-hit",
-				title = "The.Matrix.1999.1080p.Stored",
-				magnetUri = "magnet:?xt=urn:btih:stored-matrix",
-				quality = "1080p",
-			),
-			positionMs = 300_000L,
-			durationMs = 600_000L,
-			updatedAtEpochMs = 123L,
-		)
-
 		composeRule.setContent {
 			HomeScreen(
 				controller = movieBrowseController(listOf(odyssey(), interstellar())),
-				resumeWatching = listOf(entry),
+				resumeWatching = listOf(resumeEntry()),
 				onMovieSelected = {},
 				onResumeWatching = {},
 				onCancelResumeWatching = {},
@@ -227,23 +201,24 @@ class KinoAppTest {
 				movieSearchController = movieSearchController,
 				torrentSearchController = torrentSearchController,
 				playbackController = playbackController,
-				watchProgressRepository = watchProgressRepository(),
+				watchProgressRepository = watchProgressRepository(listOf(resumeEntry())),
 				playerContent = { _, _, _, _ -> Box(Modifier.testTag("kino-player")) },
 			)
 		}
 
 		val targetIndex = 12
-		val firstCard = composeRule.onNodeWithTag("home-trending-${trending.first().tmdbId}")
 		composeRule.waitUntil(timeoutMillis = 5_000) {
-			try {
-				firstCard.assertIsFocused()
-				true
-			} catch (_: AssertionError) {
-				false
-			}
+			composeRule.onAllNodes(hasTestTag("home-trending-${trending.first().tmdbId}"))
+				.fetchSemanticsNodes()
+				.isNotEmpty()
 		}
+		composeRule.onNodeWithTag("resume-watching-603")
+			.requestFocus()
+			.assertIsFocused()
+			.performKeyInput { pressKey(Key.DirectionDown) }
 
-		var focusedCard = firstCard
+		var focusedCard = composeRule.onNodeWithTag("home-trending-${trending.first().tmdbId}")
+		focusedCard.assertIsFocused()
 		for (index in 1..targetIndex) {
 			focusedCard.performKeyInput { pressKey(Key.DirectionRight) }
 			focusedCard = composeRule.onNodeWithTag("home-trending-${trending[index].tmdbId}")
@@ -265,18 +240,7 @@ class KinoAppTest {
 
 	@Test
 	fun resumeWatchingStartsStoredTorrentAtStoredPositionWithoutSearchingAgain() {
-		val entry = WatchProgressEntry(
-			movie = matrix(),
-			result = TorrentSearchResult(
-				id = "stored-hit",
-				title = "The.Matrix.1999.1080p.Stored",
-				magnetUri = "magnet:?xt=urn:btih:stored-matrix",
-				quality = "1080p",
-			),
-			positionMs = 300_000L,
-			durationMs = 600_000L,
-			updatedAtEpochMs = 123L,
-		)
+		val entry = resumeEntry()
 		var torrentSearchCalls = 0
 		var playerMovie: Movie? = null
 		var playerResult: TorrentSearchResult? = null
@@ -349,6 +313,19 @@ class KinoAppTest {
 		sizeBytes = 8_000_000_000,
 		seeders = 42,
 		source = "Knaben",
+	)
+
+	private fun resumeEntry() = WatchProgressEntry(
+		movie = matrix(),
+		result = TorrentSearchResult(
+			id = "stored-hit",
+			title = "The.Matrix.1999.1080p.Stored",
+			magnetUri = "magnet:?xt=urn:btih:stored-matrix",
+			quality = "1080p",
+		),
+		positionMs = 300_000L,
+		durationMs = 600_000L,
+		updatedAtEpochMs = 123L,
 	)
 
 	private fun matrix() = Movie(
