@@ -70,17 +70,17 @@ jobs:
           fi
 
       - name: Preview update notification
-        if: (github.event_name == 'pull_request' || github.event_name == 'push') && steps.versions.outputs.update_available == 'true'
+        if: (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/master')) && steps.versions.outputs.update_available == 'true'
         run: |
           cat <<'EOF'
-          A newer TorrServer release was detected. Scheduled/manual runs will create or update the tracking issue.
+          A newer TorrServer release was detected. Scheduled/manual runs and pushes to master will create or update the tracking issue.
           EOF
           echo "Pinned: ${{ steps.versions.outputs.pinned_tag }}"
           echo "Latest: ${{ steps.versions.outputs.latest_tag }}"
           echo "Release: ${{ steps.versions.outputs.release_url }}"
 
       - name: Create or update TorrServer update issue
-        if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.versions.outputs.update_available == 'true'
+        if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')) && steps.versions.outputs.update_available == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PINNED_TAG: ${{ steps.versions.outputs.pinned_tag }}
