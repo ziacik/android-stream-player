@@ -28,6 +28,7 @@ fun KinoApp(
 	var selectedMovie by remember { mutableStateOf<Movie?>(null) }
 	var playbackMovie by remember { mutableStateOf<Movie?>(null) }
 	var resumePositionMs by remember { mutableStateOf<Long?>(null) }
+	val homeScreenState = rememberHomeScreenState()
 	val playbackState by playbackController.state.collectAsState()
 	val resumeWatching by watchProgressRepository.entries.collectAsState()
 	val startingResumeMovieId = startingResumeMovieId(
@@ -95,6 +96,7 @@ fun KinoApp(
 				onRemoveResumeWatching = watchProgressRepository::remove,
 				startingResumeMovieId = startingResumeMovieId,
 				onSearch = { rootScreen = KinoRootScreen.Search },
+				homeState = homeScreenState,
 			)
 		}
 
