@@ -1,5 +1,6 @@
 package sk.ziacik.androidstreamplayer.ui
 
+import android.view.KeyEvent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Text
@@ -16,7 +17,7 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
-import androidx.test.espresso.Espresso.pressBack
+import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -249,7 +250,7 @@ class KinoAppTest {
 		composeRule.waitUntil(timeoutMillis = 5_000) {
 			composeRule.onAllNodes(hasTestTag("movie-detail")).fetchSemanticsNodes().isNotEmpty()
 		}
-		pressBack()
+		InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
 		composeRule.waitUntil(timeoutMillis = 5_000) {
 			composeRule.onAllNodes(hasTestTag("home-dashboard")).fetchSemanticsNodes().isNotEmpty()
 		}
