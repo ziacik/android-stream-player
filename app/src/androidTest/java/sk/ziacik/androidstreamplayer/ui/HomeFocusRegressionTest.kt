@@ -4,11 +4,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,7 +58,7 @@ class HomeFocusRegressionTest {
 	}
 
 	@Test
-	fun removingLastFocusedResumeItemMovesFocusToTrending() {
+	fun removingLastResumeItemThroughActionsMovesFocusToTrending() {
 		var resumeWatching by mutableStateOf(listOf(resumeEntry()))
 
 		composeRule.setContent {
@@ -65,20 +68,20 @@ class HomeFocusRegressionTest {
 				onMovieSelected = {},
 				onResumeWatching = {},
 				onCancelResumeWatching = {},
-				onRemoveResumeWatching = {},
+				onRemoveResumeWatching = { movieId ->
+					resumeWatching = resumeWatching.filterNot { it.movie.tmdbId == movieId }
+				},
 				startingResumeMovieId = null,
 				onSearch = {},
 			)
 		}
 
-		composeRule.waitUntil(timeoutMillis = 5_000) {
-			composeRule.onAllNodes(hasTestTag("home-trending-1054867")).fetchSemanticsNodes().isNotEmpty()
-		}
 		waitUntilFocused("resume-watching-603")
+		composeRule.onNodeWithTag("resume-watching-603")
+			.performSemanticsAction(SemanticsActions.OnLongClick) { it.invoke() }
+		composeRule.onNodeWithTag("resume-watching-actions").assertExists()
+		composeRule.onNodeWithTag("resume-watching-remove").performClick()
 
-		composeRule.runOnIdle {
-			resumeWatching = emptyList()
-		}
 		composeRule.waitUntil(timeoutMillis = 5_000) {
 			composeRule.onAllNodes(hasTestTag("resume-watching-603")).fetchSemanticsNodes().isEmpty()
 		}
