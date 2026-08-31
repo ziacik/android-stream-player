@@ -45,6 +45,42 @@ class TmdbMovieCatalogTest {
     }
 
     @Test
+    fun `trending requests weekly movies and maps results`() = runTest {
+        val transport = RecordingTmdbTransport(
+            response = TmdbHttpResponse(
+                code = 200,
+                body = """
+                    {
+                      "results": [
+                        {
+                          "id": 603,
+                          "title": "The Matrix",
+                          "original_title": "The Matrix",
+                          "release_date": "1999-03-30",
+                          "overview": "A hacker discovers reality is a simulation.",
+                          "vote_average": 8.2,
+                          "poster_path": "/poster.jpg",
+                          "backdrop_path": "/backdrop.jpg"
+                        }
+                      ]
+                    }
+                """.trimIndent(),
+            ),
+        )
+        val catalog = TmdbMovieCatalog(apiKey = "test-key", transport = transport)
+
+        val result = catalog.trending()
+
+        assertEquals(603, result.single().tmdbId)
+        assertEquals(1999, result.single().releaseYear)
+        val request = checkNotNull(transport.request)
+        assertEquals("GET", request.method)
+        assertEquals("/3/trending/movie/week", request.url.encodedPath)
+        assertEquals("en-US", request.url.queryParameter("language"))
+        assertEquals("test-key", request.url.queryParameter("api_key"))
+    }
+
+    @Test
     fun `external ids returns imdb id`() = runTest {
         val transport = RecordingTmdbTransport(
             response = TmdbHttpResponse(
