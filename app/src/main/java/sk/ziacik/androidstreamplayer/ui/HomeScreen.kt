@@ -159,26 +159,25 @@ fun HomeScreen(
 		val destinationRequester: FocusRequester
 		when {
 			remainingResumeId != null -> {
-			destinationTarget = HomeFocusTarget.Resume(remainingResumeId)
-			destinationRequester = resumeRequesters.getValue(remainingResumeId)
-		}
+				destinationTarget = HomeFocusTarget.Resume(remainingResumeId)
+				destinationRequester = resumeRequesters.getValue(remainingResumeId)
+			}
 
 			destinationTrendingId != null -> {
-			destinationTarget = HomeFocusTarget.Trending(destinationTrendingId)
-			destinationRequester = trendingRequesters.getValue(destinationTrendingId)
-		}
+				destinationTarget = HomeFocusTarget.Trending(destinationTrendingId)
+				destinationRequester = trendingRequesters.getValue(destinationTrendingId)
+			}
 
 			!state.isLoading -> {
-			destinationTarget = HomeFocusTarget.Search
-			destinationRequester = searchRequester
-		}
+				destinationTarget = HomeFocusTarget.Search
+				destinationRequester = searchRequester
+			}
 
 			else -> return@LaunchedEffect
 		}
 
-		// Keep the actions overlay alive while the removed row leaves the lazy layout.
-		// Otherwise disposing the currently focused Remove button can clear the focus
-		// request that targets the newly exposed row underneath it.
+		// The actions overlay is already gone and its focus was explicitly cleared.
+		// Wait for the lazy layout to expose the replacement row before requesting focus.
 		homeState.contentListState.scrollToItem(0)
 		withFrameNanos { }
 
@@ -191,11 +190,20 @@ fun HomeScreen(
 				homeState.focusedTarget = destinationTarget
 			}
 		}
-		destinationRequester.requestFocus()
 
-		// Let Compose commit the new focus owner before removing the old focused subtree.
-		withFrameNanos { }
-		resumeActionEntry = null
+		fun requestFocusSafely(requester: FocusRequester): Boolean =
+			runCatching { requester.requestFocus() }.getOrDefault(false)
+
+		var restored = requestFocusSafely(destinationRequester)
+		if (!restored) {
+			withFrameNanos { }
+			restored = requestFocusSafely(destinationRequester)
+		}
+		if (!restored) {
+			homeState.focusedTarget = HomeFocusTarget.Search
+			requestFocusSafely(searchRequester)
+		}
+
 		pendingResumeRemovalId = null
 	}
 
@@ -369,6 +377,7 @@ fun HomeScreen(
 					onRemove = {
 						if (pendingResumeRemovalId == null) {
 							pendingResumeRemovalId = entry.movie.tmdbId
+							resumeActionEntry = null
 							onRemoveResumeWatching(entry.movie.tmdbId)
 						}
 					},
@@ -699,6 +708,7 @@ private fun HomeResumeWatchingActions(
 	onCancel: () -> Unit,
 ) {
 	val cancelRequester = remember { FocusRequester() }
+	val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 	var waitingForConfirmRelease by remember(entry.movie.tmdbId) { mutableStateOf(true) }
 	var removeFocused by remember { mutableStateOf(false) }
 	var cancelFocused by remember { mutableStateOf(false) }
@@ -753,7 +763,10 @@ private fun HomeResumeWatchingActions(
 				)
 				Spacer(Modifier.height(4.dp))
 				Button(
-					onClick = onRemove,
+					onClick = {
+						focusManager.clearFocus(force = true)
+						onRemove()
+					},
 					modifier = Modifier
 						.fillMaxWidth()
 						.graphicsLayer {
