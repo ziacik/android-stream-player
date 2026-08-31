@@ -1,0 +1,134 @@
+name: TorrServer Update Check
+
+on:
+  schedule:
+    - cron: '17 7 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - app/build.gradle.kts
+      - .github/workflows/torrserver-update-check.yml
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Compare pinned and latest TorrServer releases
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t pinned_tags < <(
+            grep -oE 'TorrServer/releases/download/[^/" ]+' app/build.gradle.kts \
+              | sed 's#.*/##' \
+              | sort -u
+          )
+
+          if [[ ${#pinned_tags[@]} -ne 1 ]]; then
+            echo "Expected exactly one pinned TorrServer release in app/build.gradle.kts, found ${#pinned_tags[@]}" >&2
+            exit 1
+          fi
+
+          pinned_tag="${pinned_tags[0]}"
+          latest_json="$(gh api repos/YouROK/TorrServer/releases/latest)"
+          latest_tag="$(jq -r '.tag_name' <<<"$latest_json")"
+          release_url="$(jq -r '.html_url' <<<"$latest_json")"
+          published_at="$(jq -r '.published_at' <<<"$latest_json")"
+
+          if [[ -z "$latest_tag" || "$latest_tag" == "null" ]]; then
+            echo "Could not determine latest TorrServer release" >&2
+            exit 1
+          fi
+
+          echo "Pinned: $pinned_tag"
+          echo "Latest: $latest_tag"
+          echo "pinned_tag=$pinned_tag" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
+          echo "release_url=$release_url" >> "$GITHUB_OUTPUT"
+          echo "published_at=$published_at" >> "$GITHUB_OUTPUT"
+
+          if [[ "$pinned_tag" == "$latest_tag" ]]; then
+            echo "update_available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "update_available=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::TorrServer update available: $pinned_tag -> $latest_tag"
+          fi
+
+      - name: Preview update notification on pull requests
+        if: github.event_name == 'pull_request' && steps.versions.outputs.update_available == 'true'
+        run: |
+          cat <<'EOF'
+          A newer TorrServer release was detected. Scheduled/manual runs will create or update the tracking issue.
+          EOF
+          echo "Pinned: ${{ steps.versions.outputs.pinned_tag }}"
+          echo "Latest: ${{ steps.versions.outputs.latest_tag }}"
+          echo "Release: ${{ steps.versions.outputs.release_url }}"
+
+      - name: Create or update TorrServer update issue
+        if: github.event_name != 'pull_request' && steps.versions.outputs.update_available == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PINNED_TAG: ${{ steps.versions.outputs.pinned_tag }}
+          LATEST_TAG: ${{ steps.versions.outputs.latest_tag }}
+          RELEASE_URL: ${{ steps.versions.outputs.release_url }}
+          PUBLISHED_AT: ${{ steps.versions.outputs.published_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          title='TorrServer update available'
+          body_file="$RUNNER_TEMP/torrserver-update.md"
+
+          cat > "$body_file" <<EOF
+          A newer TorrServer release is available.
+
+          | | Version |
+          | --- | --- |
+          | Pinned | \`$PINNED_TAG\` |
+          | Latest | \`$LATEST_TAG\` |
+
+          Release: $RELEASE_URL  
+          Published: $PUBLISHED_AT
+
+          Before upgrading:
+          1. Review the upstream release notes, especially security, networking, filesystem/path and torrent-handling changes.
+          2. Update the pinned release tag in \`app/build.gradle.kts\`.
+          3. Update the SHA-256 values for every supported TorrServer ABI.
+          4. Let Android CI verify tests, APK packaging and the clean ABI switch.
+
+          The binary is intentionally not upgraded automatically.
+
+          _Maintained automatically by \`torrserver-update-check.yml\`._
+          EOF
+
+          issue_number="$(
+            gh issue list \
+              --repo "$GITHUB_REPOSITORY" \
+              --state open \
+              --search 'TorrServer update available in:title' \
+              --json number,title \
+              --jq '.[] | select(.title == "TorrServer update available") | .number' \
+              | head -n 1
+          )"
+
+          if [[ -n "$issue_number" ]]; then
+            gh issue edit "$issue_number" \
+              --repo "$GITHUB_REPOSITORY" \
+              --body-file "$body_file"
+          else
+            gh issue create \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$title" \
+              --body-file "$body_file"
+          fi
