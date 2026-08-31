@@ -10,7 +10,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.test.requestFocus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,12 +48,8 @@ class HomeFocusRegressionTest {
 			)
 		}
 
-		composeRule.waitUntil(timeoutMillis = 5_000) {
-			composeRule.onAllNodes(hasTestTag("home-trending-1054867")).fetchSemanticsNodes().isNotEmpty()
-		}
+		waitUntilFocused("resume-watching-603")
 		composeRule.onNodeWithTag("resume-watching-603")
-			.requestFocus()
-			.assertIsFocused()
 			.performKeyInput { pressKey(Key.DirectionRight) }
 		composeRule.onNodeWithTag("resume-watching-603").assertIsFocused()
 	}
@@ -79,9 +74,7 @@ class HomeFocusRegressionTest {
 		composeRule.waitUntil(timeoutMillis = 5_000) {
 			composeRule.onAllNodes(hasTestTag("home-trending-1054867")).fetchSemanticsNodes().isNotEmpty()
 		}
-		composeRule.onNodeWithTag("resume-watching-603")
-			.requestFocus()
-			.assertIsFocused()
+		waitUntilFocused("resume-watching-603")
 
 		composeRule.runOnIdle {
 			resumeWatching = emptyList()
@@ -89,8 +82,15 @@ class HomeFocusRegressionTest {
 		composeRule.waitUntil(timeoutMillis = 5_000) {
 			composeRule.onAllNodes(hasTestTag("resume-watching-603")).fetchSemanticsNodes().isEmpty()
 		}
-		composeRule.waitForIdle()
-		composeRule.onNodeWithTag("home-trending-1054867").assertIsFocused()
+		waitUntilFocused("home-trending-1054867")
+	}
+
+	private fun waitUntilFocused(tag: String) {
+		composeRule.waitUntil(timeoutMillis = 5_000) {
+			runCatching {
+				composeRule.onNodeWithTag(tag).assertIsFocused()
+			}.isSuccess
+		}
 	}
 
 	private fun movieBrowseController() = MovieBrowseController(
