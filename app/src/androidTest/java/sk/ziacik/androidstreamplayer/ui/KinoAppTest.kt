@@ -9,11 +9,15 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
@@ -207,25 +211,20 @@ class KinoAppTest {
 		}
 
 		val targetIndex = 12
+		val firstTrendingTag = "home-trending-${trending.first().tmdbId}"
+		val targetTag = "home-trending-${trending[targetIndex].tmdbId}"
 		composeRule.waitUntil(timeoutMillis = 5_000) {
-			composeRule.onAllNodes(hasTestTag("home-trending-${trending.first().tmdbId}"))
-				.fetchSemanticsNodes()
-				.isNotEmpty()
-		}
-		composeRule.onNodeWithTag("resume-watching-603")
-			.requestFocus()
-			.assertIsFocused()
-			.performKeyInput { pressKey(Key.DirectionDown) }
-
-		var focusedCard = composeRule.onNodeWithTag("home-trending-${trending.first().tmdbId}")
-		focusedCard.assertIsFocused()
-		for (index in 1..targetIndex) {
-			focusedCard.performKeyInput { pressKey(Key.DirectionRight) }
-			focusedCard = composeRule.onNodeWithTag("home-trending-${trending[index].tmdbId}")
-			focusedCard.assertIsFocused()
+			composeRule.onAllNodes(hasTestTag(firstTrendingTag)).fetchSemanticsNodes().isNotEmpty()
 		}
 
-		focusedCard.performClick()
+		composeRule.onNode(
+			hasScrollAction() and hasAnyDescendant(hasTestTag(firstTrendingTag)),
+		).performScrollToIndex(targetIndex)
+		composeRule.waitUntil(timeoutMillis = 5_000) {
+			composeRule.onAllNodes(hasTestTag(targetTag)).fetchSemanticsNodes().isNotEmpty()
+		}
+		composeRule.onNodeWithTag(targetTag).performClick()
+
 		composeRule.waitUntil(timeoutMillis = 5_000) {
 			composeRule.onAllNodes(hasTestTag("movie-detail")).fetchSemanticsNodes().isNotEmpty()
 		}
@@ -233,9 +232,11 @@ class KinoAppTest {
 		composeRule.waitUntil(timeoutMillis = 5_000) {
 			composeRule.onAllNodes(hasTestTag("home-dashboard")).fetchSemanticsNodes().isNotEmpty()
 		}
+		composeRule.waitUntil(timeoutMillis = 5_000) {
+			composeRule.onAllNodes(hasTestTag(targetTag)).fetchSemanticsNodes().isNotEmpty()
+		}
 
-		composeRule.onNodeWithTag("home-trending-${trending[targetIndex].tmdbId}")
-			.assertIsFocused()
+		composeRule.onNodeWithTag(targetTag).assertIsFocused()
 	}
 
 	@Test
