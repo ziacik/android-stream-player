@@ -204,7 +204,7 @@ class KinoAppTest {
 				movieSearchController = movieSearchController,
 				torrentSearchController = torrentSearchController,
 				playbackController = playbackController,
-				watchProgressRepository = watchProgressRepository(listOf(resumeEntry())),
+				watchProgressRepository = watchProgressRepository(),
 				playerContent = { _, _, _, _ -> Box(Modifier.testTag("kino-player")) },
 			)
 		}
