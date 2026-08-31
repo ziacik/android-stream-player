@@ -4,13 +4,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.pressKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -110,6 +114,43 @@ class KinoAppTest {
 	}
 
 	@Test
+	fun dpadDownMovesFromResumeWatchingToTrending() {
+		val entry = WatchProgressEntry(
+			movie = matrix(),
+			result = TorrentSearchResult(
+				id = "stored-hit",
+				title = "The.Matrix.1999.1080p.Stored",
+				magnetUri = "magnet:?xt=urn:btih:stored-matrix",
+				quality = "1080p",
+			),
+			positionMs = 300_000L,
+			durationMs = 600_000L,
+			updatedAtEpochMs = 123L,
+		)
+
+		composeRule.setContent {
+			HomeScreen(
+				controller = movieBrowseController(listOf(odyssey())),
+				resumeWatching = listOf(entry),
+				onMovieSelected = {},
+				onResumeWatching = {},
+				onCancelResumeWatching = {},
+				onRemoveResumeWatching = {},
+				startingResumeMovieId = null,
+				onSearch = {},
+			)
+		}
+
+		composeRule.waitUntil(timeoutMillis = 5_000) {
+			composeRule.onAllNodes(hasTestTag("home-trending-1054867")).fetchSemanticsNodes().isNotEmpty()
+		}
+		composeRule.onNodeWithTag("resume-watching-603")
+			.assertIsFocused()
+			.performKeyInput { pressKey(Key.DirectionDown) }
+		composeRule.onNodeWithTag("home-trending-1054867").assertIsFocused()
+	}
+
+	@Test
 	fun resumeWatchingStartsStoredTorrentAtStoredPositionWithoutSearchingAgain() {
 		val entry = WatchProgressEntry(
 			movie = matrix(),
@@ -161,7 +202,8 @@ class KinoAppTest {
 						modifier = Modifier
 							.testTag("kino-player")
 							.clickable(onClick = onExit),
-					)
+					) {
+					}
 				},
 			)
 		}
@@ -179,9 +221,11 @@ class KinoAppTest {
 		}
 	}
 
-	private fun movieBrowseController() = MovieBrowseController(
+	private fun movieBrowseController(
+		trending: List<Movie> = listOf(matrix()),
+	) = MovieBrowseController(
 		scope = scope,
-		loadTrending = { listOf(matrix()) },
+		loadTrending = { trending },
 	)
 
 	private fun torrent(request: MovieTorrentSearchRequest) = TorrentSearchResult(
@@ -201,6 +245,17 @@ class KinoAppTest {
 		releaseYear = 1999,
 		overview = "A hacker discovers the truth about his world.",
 		voteAverage = 8.2,
+		posterPath = null,
+		backdropPath = null,
+	)
+
+	private fun odyssey() = Movie(
+		tmdbId = 1_054_867,
+		title = "The Odyssey",
+		originalTitle = "The Odyssey",
+		releaseYear = 2026,
+		overview = "Odysseus journeys home.",
+		voteAverage = 7.5,
 		posterPath = null,
 		backdropPath = null,
 	)
