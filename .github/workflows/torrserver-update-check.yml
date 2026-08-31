@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: '17 7 * * 1'
   workflow_dispatch:
+  push:
+    paths:
+      - app/build.gradle.kts
+      - .github/workflows/torrserver-update-check.yml
   pull_request:
     paths:
       - app/build.gradle.kts
@@ -65,8 +69,8 @@ jobs:
             echo "::warning::TorrServer update available: $pinned_tag -> $latest_tag"
           fi
 
-      - name: Preview update notification on pull requests
-        if: github.event_name == 'pull_request' && steps.versions.outputs.update_available == 'true'
+      - name: Preview update notification
+        if: (github.event_name == 'pull_request' || github.event_name == 'push') && steps.versions.outputs.update_available == 'true'
         run: |
           cat <<'EOF'
           A newer TorrServer release was detected. Scheduled/manual runs will create or update the tracking issue.
@@ -76,7 +80,7 @@ jobs:
           echo "Release: ${{ steps.versions.outputs.release_url }}"
 
       - name: Create or update TorrServer update issue
-        if: github.event_name != 'pull_request' && steps.versions.outputs.update_available == 'true'
+        if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.versions.outputs.update_available == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PINNED_TAG: ${{ steps.versions.outputs.pinned_tag }}
