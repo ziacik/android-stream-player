@@ -1,6 +1,9 @@
 package sk.ziacik.androidstreamplayer.ui
 
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -13,6 +16,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import sk.ziacik.androidstreamplayer.catalog.Movie
@@ -22,6 +26,7 @@ import sk.ziacik.androidstreamplayer.playback.PlaybackUiState
 import sk.ziacik.androidstreamplayer.search.TorrentSearchController
 import sk.ziacik.androidstreamplayer.search.TorrentSearchProvider
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
+import sk.ziacik.androidstreamplayer.ui.theme.AndroidStreamPlayerTheme
 
 class MovieDetailScreenTest {
 	@get:Rule
@@ -41,6 +46,14 @@ class MovieDetailScreenTest {
 		composeRule.onNodeWithText("The Matrix").assertIsDisplayed()
 		composeRule.onNodeWithText("1999").assertIsDisplayed()
 		composeRule.onNodeWithText("A hacker discovers the truth about his world.").assertIsDisplayed()
+	}
+
+	@Test
+	fun primaryHeadingsContrastWithDarkBackground() {
+		setDetail(provider = TorrentSearchProvider { emptyList() })
+
+		composeRule.onNodeWithText("The Matrix").assertContainsBrightPixels()
+		composeRule.onNodeWithText("Available versions").assertContainsBrightPixels()
 	}
 
 	@Test
@@ -148,14 +161,33 @@ class MovieDetailScreenTest {
 			provider = provider,
 		)
 		composeRule.setContent {
-			MovieDetailScreen(
-				movie = matrix(),
-				torrentController = controller,
-				playbackState = playbackState,
-				onPlay = onPlay,
-				onBack = {},
-			)
+			AndroidStreamPlayerTheme {
+				MovieDetailScreen(
+					movie = matrix(),
+					torrentController = controller,
+					playbackState = playbackState,
+					onPlay = onPlay,
+					onBack = {},
+				)
+			}
 		}
+	}
+
+	private fun SemanticsNodeInteraction.assertContainsBrightPixels() {
+		val pixels = captureToImage().toPixelMap()
+		var brightestChannel = 0f
+		for (x in 0 until pixels.width) {
+			for (y in 0 until pixels.height) {
+				val color = pixels[x, y]
+				brightestChannel = maxOf(
+					brightestChannel,
+					color.red,
+					color.green,
+					color.blue,
+				)
+			}
+		}
+		assertTrue("Expected bright text pixels on the dark detail background", brightestChannel > 0.5f)
 	}
 
 	private fun matrix() = Movie(

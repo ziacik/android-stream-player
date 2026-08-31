@@ -57,6 +57,7 @@ fun TorrentResults(
 			text = "Available versions",
 			style = MaterialTheme.typography.headlineSmall,
 			fontWeight = FontWeight.SemiBold,
+			color = MaterialTheme.colorScheme.onSurface,
 		)
 
 		startupErrorMessage?.let { message ->
@@ -97,6 +98,7 @@ fun TorrentResults(
 					Text(
 						text = "Couldn’t find versions",
 						style = MaterialTheme.typography.titleMedium,
+						color = MaterialTheme.colorScheme.onSurface,
 					)
 					Text(
 						text = "Torrent search failed. The movie is still here, so you can retry without going back.",
@@ -117,6 +119,7 @@ fun TorrentResults(
 					Text(
 						text = "No versions found",
 						style = MaterialTheme.typography.titleMedium,
+						color = MaterialTheme.colorScheme.onSurface,
 					)
 					Text(
 						text = "Try another movie or come back later.",

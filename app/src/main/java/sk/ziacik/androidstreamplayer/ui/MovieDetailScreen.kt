@@ -175,6 +175,7 @@ private fun MovieIdentity(
 				text = movie.title,
 				style = MaterialTheme.typography.displaySmall,
 				fontWeight = FontWeight.Black,
+				color = MaterialTheme.colorScheme.onSurface,
 				maxLines = 2,
 				overflow = TextOverflow.Ellipsis,
 			)
