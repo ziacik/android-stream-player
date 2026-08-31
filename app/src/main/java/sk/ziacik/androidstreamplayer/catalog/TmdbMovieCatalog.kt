@@ -55,10 +55,51 @@ class TmdbMovieCatalog internal constructor(
             throw IOException("TMDB movie search failed with HTTP ${response.code}")
         }
 
-        val results = try {
-            JSONObject(response.body).getJSONArray("results")
+        return parseMovies(response.body, "Invalid TMDB movie search response")
+    }
+
+    suspend fun trending(): List<Movie> {
+        val url = "$API_BASE_URL/trending/movie/week".toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("api_key", apiKey)
+            .addQueryParameter("language", LANGUAGE)
+            .build()
+
+        val response = transport.execute(Request.Builder().url(url).get().build())
+        if (!response.isSuccessful) {
+            throw IOException("TMDB trending movies failed with HTTP ${response.code}")
+        }
+
+        return parseMovies(response.body, "Invalid TMDB trending movies response")
+    }
+
+    override suspend fun externalIds(tmdbId: Int): MovieExternalIds {
+        val url = "$API_BASE_URL/movie/$tmdbId/external_ids".toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("api_key", apiKey)
+            .build()
+
+        val response = transport.execute(Request.Builder().url(url).get().build())
+        if (!response.isSuccessful) {
+            throw IOException("TMDB external IDs failed with HTTP ${response.code}")
+        }
+
+        val body = try {
+            JSONObject(response.body)
         } catch (error: Exception) {
-            throw IOException("Invalid TMDB movie search response", error)
+            throw IOException("Invalid TMDB external IDs response", error)
+        }
+
+        return MovieExternalIds(
+            imdbId = body.optNullableString("imdb_id"),
+        )
+    }
+
+    private fun parseMovies(body: String, invalidResponseMessage: String): List<Movie> {
+        val results = try {
+            JSONObject(body).getJSONArray("results")
+        } catch (error: Exception) {
+            throw IOException(invalidResponseMessage, error)
         }
 
         return buildList {
@@ -84,28 +125,6 @@ class TmdbMovieCatalog internal constructor(
                 )
             }
         }
-    }
-
-    override suspend fun externalIds(tmdbId: Int): MovieExternalIds {
-        val url = "$API_BASE_URL/movie/$tmdbId/external_ids".toHttpUrl()
-            .newBuilder()
-            .addQueryParameter("api_key", apiKey)
-            .build()
-
-        val response = transport.execute(Request.Builder().url(url).get().build())
-        if (!response.isSuccessful) {
-            throw IOException("TMDB external IDs failed with HTTP ${response.code}")
-        }
-
-        val body = try {
-            JSONObject(response.body)
-        } catch (error: Exception) {
-            throw IOException("Invalid TMDB external IDs response", error)
-        }
-
-        return MovieExternalIds(
-            imdbId = body.optNullableString("imdb_id"),
-        )
     }
 
     private fun JSONObject.optNullableString(name: String): String? =
