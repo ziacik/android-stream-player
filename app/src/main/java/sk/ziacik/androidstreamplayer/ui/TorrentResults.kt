@@ -199,6 +199,7 @@ private fun TorrentResultRow(
 			} else {
 				MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
 			},
+			contentColor = MaterialTheme.colorScheme.onSurface,
 		),
 	) {
 		Row(
