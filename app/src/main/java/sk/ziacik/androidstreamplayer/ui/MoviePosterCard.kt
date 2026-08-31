@@ -107,6 +107,7 @@ fun MoviePosterCard(
 								listOf(
 									MaterialTheme.colorScheme.surfaceVariant,
 									MaterialTheme.colorScheme.surface,
+								),
 							),
 						),
 					contentAlignment = Alignment.Center,
