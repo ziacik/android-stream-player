@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -132,6 +132,37 @@ fun HomeScreen(
 				searchRequester.requestFocus()
 				initialFocusHandled = true
 			}
+		}
+	}
+
+	LaunchedEffect(
+		resumeIds,
+		trendingIds,
+		resumeActionEntry,
+		state.isLoading,
+	) {
+		if (resumeActionEntry != null) return@LaunchedEffect
+
+		when (val target = homeState.focusedTarget) {
+			is HomeFocusTarget.Resume -> {
+				if (target.movieId !in resumeIds) {
+					homeState.lastResumeMovieId = null
+					when {
+						firstResumeRequester != null -> firstResumeRequester.requestFocus()
+						trendingDestination != null -> trendingDestination.requestFocus()
+						!state.isLoading -> searchRequester.requestFocus()
+					}
+				}
+			}
+
+			is HomeFocusTarget.Trending -> {
+				if (target.movieId !in trendingIds && !state.isLoading) {
+					homeState.lastTrendingMovieId = null
+					(firstTrendingRequester ?: firstResumeRequester ?: searchRequester).requestFocus()
+				}
+			}
+
+			else -> Unit
 		}
 	}
 
@@ -318,15 +349,17 @@ private fun HomeTrendingRow(
 					horizontalArrangement = Arrangement.spacedBy(18.dp),
 					contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
 				) {
-					items(
+					itemsIndexed(
 						items = movies,
-						key = { it.tmdbId },
-					) { movie ->
+						key = { _, movie -> movie.tmdbId },
+					) { index, movie ->
 						MoviePosterCard(
 							movie = movie,
 							onClick = { onMovieSelected(movie) },
 							focusRequester = focusRequesters.getValue(movie.tmdbId),
 							onFocused = { onFocused(movie) },
+							leftFocusRequester = if (index == 0) FocusRequester.Cancel else null,
+							rightFocusRequester = if (index == movies.lastIndex) FocusRequester.Cancel else null,
 							testTag = "home-trending-${movie.tmdbId}",
 							modifier = Modifier.width(HOME_POSTER_WIDTH),
 						)
@@ -394,13 +427,15 @@ private fun HomeResumeWatchingRow(
 			horizontalArrangement = Arrangement.spacedBy(18.dp),
 			contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
 		) {
-			items(
+			itemsIndexed(
 				items = entries,
-				key = { it.movie.tmdbId },
-			) { entry ->
+				key = { _, entry -> entry.movie.tmdbId },
+			) { index, entry ->
 				HomeResumeWatchingCard(
 					entry = entry,
 					focusRequester = focusRequesters.getValue(entry.movie.tmdbId),
+					leftFocusRequester = if (index == 0) FocusRequester.Cancel else null,
+					rightFocusRequester = if (index == entries.lastIndex) FocusRequester.Cancel else null,
 					onFocused = { onFocused(entry) },
 					onResume = { onResume(entry) },
 					onCancelStarting = onCancelStarting,
@@ -416,6 +451,8 @@ private fun HomeResumeWatchingRow(
 private fun HomeResumeWatchingCard(
 	entry: WatchProgressEntry,
 	focusRequester: FocusRequester,
+	leftFocusRequester: FocusRequester?,
+	rightFocusRequester: FocusRequester?,
 	onFocused: () -> Unit,
 	onResume: () -> Unit,
 	onCancelStarting: () -> Unit,
@@ -479,6 +516,8 @@ private fun HomeResumeWatchingCard(
 				}
 			},
 			focusRequester = focusRequester,
+			leftFocusRequester = leftFocusRequester,
+			rightFocusRequester = rightFocusRequester,
 			onFocused = onFocused,
 			testTag = "resume-watching-${entry.movie.tmdbId}",
 			modifier = Modifier.fillMaxWidth(),
