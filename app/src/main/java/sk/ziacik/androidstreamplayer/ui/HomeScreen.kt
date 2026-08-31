@@ -86,9 +86,9 @@ fun HomeScreen(
 	}
 	val firstResumeRequester = resumeWatching.firstOrNull()?.let { resumeRequesters[it.movie.tmdbId] }
 	val firstTrendingRequester = state.trending.firstOrNull()?.let { trendingRequesters[it.tmdbId] }
-	val firstContentRequester = firstResumeRequester ?: firstTrendingRequester
 	val resumeDestination = homeState.lastResumeMovieId?.let(resumeRequesters::get) ?: firstResumeRequester
 	val trendingDestination = homeState.lastTrendingMovieId?.let(trendingRequesters::get) ?: firstTrendingRequester
+	val contentDestination = resumeDestination ?: trendingDestination
 	val restoredFocusRequester = when (val target = homeState.focusedTarget) {
 		HomeFocusTarget.Search -> searchRequester
 		is HomeFocusTarget.Resume -> resumeRequesters[target.movieId]
@@ -113,7 +113,7 @@ fun HomeScreen(
 
 	LaunchedEffect(
 		restoredFocusRequester,
-		firstContentRequester,
+		contentDestination,
 		state.isLoading,
 		homeState.focusedTarget,
 	) {
@@ -127,8 +127,8 @@ fun HomeScreen(
 
 			waitingForTrendingRestore -> Unit
 
-			firstContentRequester != null -> {
-				firstContentRequester.requestFocus()
+			contentDestination != null -> {
+				contentDestination.requestFocus()
 				initialFocusHandled = true
 			}
 
@@ -306,7 +306,7 @@ fun HomeScreen(
 				Spacer(Modifier.height(32.dp))
 				HomeHeader(
 					searchRequester = searchRequester,
-					downFocusRequester = firstContentRequester,
+					downFocusRequester = contentDestination,
 					onFocused = { homeState.focusedTarget = HomeFocusTarget.Search },
 					onSearch = {
 						homeState.focusedTarget = HomeFocusTarget.Search
