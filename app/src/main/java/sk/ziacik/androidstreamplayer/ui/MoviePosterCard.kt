@@ -36,8 +36,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import java.util.Locale
 import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.catalog.tmdbPosterUrl
+
+internal fun tmdbRatingLabel(voteAverage: Double?): String? =
+	voteAverage
+		?.takeIf { it > 0.0 }
+		?.let { rating -> "★ %.1f".format(Locale.US, rating) }
 
 @Composable
 fun MoviePosterCard(
@@ -137,6 +143,24 @@ fun MoviePosterCard(
 						),
 					),
 			)
+
+			tmdbRatingLabel(movie.voteAverage)?.let { ratingLabel ->
+				Box(
+					modifier = Modifier
+						.align(Alignment.TopEnd)
+						.padding(8.dp)
+						.clip(RoundedCornerShape(6.dp))
+						.background(Color.Black.copy(alpha = 0.72f))
+						.padding(horizontal = 7.dp, vertical = 4.dp),
+				) {
+					Text(
+						text = ratingLabel,
+						style = MaterialTheme.typography.labelMedium,
+						fontWeight = FontWeight.Bold,
+						color = Color.White,
+					)
+				}
+			}
 
 			if (focused) {
 				Column(
