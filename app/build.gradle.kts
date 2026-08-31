@@ -102,7 +102,7 @@ val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
 
 android {
     namespace = "sk.ziacik.androidstreamplayer"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "sk.ziacik.androidstreamplayer"
