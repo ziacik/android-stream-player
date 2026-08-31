@@ -103,10 +103,11 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run focus regression on emulator
+      - name: Run focus regression on TV emulator
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 35
           arch: x86_64
+          profile: tv_1080p
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
+          script: ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=sk.ziacik.androidstreamplayer.ui.KinoAppTest#dpadCanMoveDownAgainAfterReturningFromScrolledTrendingRow --stacktrace
