@@ -47,6 +47,8 @@ fun MoviePosterCard(
 	onFocused: () -> Unit,
 	upFocusRequester: FocusRequester? = null,
 	downFocusRequester: FocusRequester? = null,
+	leftFocusRequester: FocusRequester? = null,
+	rightFocusRequester: FocusRequester? = null,
 	testTag: String = "movie-${movie.tmdbId}",
 	modifier: Modifier = Modifier,
 ) {
@@ -63,6 +65,8 @@ fun MoviePosterCard(
 			.focusProperties {
 				if (upFocusRequester != null) up = upFocusRequester
 				if (downFocusRequester != null) down = downFocusRequester
+				if (leftFocusRequester != null) left = leftFocusRequester
+				if (rightFocusRequester != null) right = rightFocusRequester
 			}
 			.testTag(testTag)
 			.focusRequester(focusRequester)
