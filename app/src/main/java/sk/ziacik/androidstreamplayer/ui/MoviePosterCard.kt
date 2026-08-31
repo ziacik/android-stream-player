@@ -6,11 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -47,6 +46,10 @@ fun MoviePosterCard(
 	focusRequester: FocusRequester,
 	onFocused: () -> Unit,
 	upFocusRequester: FocusRequester? = null,
+	downFocusRequester: FocusRequester? = null,
+	leftFocusRequester: FocusRequester? = null,
+	rightFocusRequester: FocusRequester? = null,
+	testTag: String = "movie-${movie.tmdbId}",
 	modifier: Modifier = Modifier,
 ) {
 	var focused by remember { mutableStateOf(false) }
@@ -55,17 +58,17 @@ fun MoviePosterCard(
 		label = "movie-poster-scale",
 	)
 	val shape = RoundedCornerShape(12.dp)
-	val focusNavigation = if (upFocusRequester != null) {
-		Modifier.focusProperties { up = upFocusRequester }
-	} else {
-		Modifier
-	}
 
 	Card(
 		onClick = onClick,
 		modifier = modifier
-			.then(focusNavigation)
-			.testTag("movie-${movie.tmdbId}")
+			.focusProperties {
+				if (upFocusRequester != null) up = upFocusRequester
+				if (downFocusRequester != null) down = downFocusRequester
+				if (leftFocusRequester != null) left = leftFocusRequester
+				if (rightFocusRequester != null) right = rightFocusRequester
+			}
+			.testTag(testTag)
 			.focusRequester(focusRequester)
 			.onFocusChanged { focusState ->
 				focused = focusState.isFocused

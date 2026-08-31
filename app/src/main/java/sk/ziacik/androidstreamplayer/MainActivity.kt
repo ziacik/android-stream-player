@@ -1,5 +1,6 @@
 package sk.ziacik.androidstreamplayer
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import androidx.activity.ComponentActivity
@@ -11,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import sk.ziacik.androidstreamplayer.catalog.MovieBrowseController
 import sk.ziacik.androidstreamplayer.catalog.MovieSearchController
 import sk.ziacik.androidstreamplayer.catalog.TmdbMovieCatalog
 import sk.ziacik.androidstreamplayer.playback.PlaybackController
@@ -34,6 +36,7 @@ class MainActivity : ComponentActivity() {
 	private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 	private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+	private lateinit var movieBrowseController: MovieBrowseController
 	private lateinit var movieSearchController: MovieSearchController
 	private lateinit var torrentSearchController: TorrentSearchController
 	private lateinit var playbackController: PlaybackController
@@ -69,6 +72,10 @@ class MainActivity : ComponentActivity() {
 		val torrentStreamer = TorrServerTorrentStreamer(torrentRuntime)
 		val movieCatalog = TmdbMovieCatalog(BuildConfig.TMDB_API_KEY)
 
+		movieBrowseController = MovieBrowseController(
+			scope = appScope,
+			loadTrending = movieCatalog::trending,
+		)
 		movieSearchController = MovieSearchController(
 			scope = appScope,
 			catalog = movieCatalog,
@@ -90,6 +97,7 @@ class MainActivity : ComponentActivity() {
 		setContent {
 			AndroidStreamPlayerTheme {
 				KinoApp(
+					movieBrowseController = movieBrowseController,
 					movieSearchController = movieSearchController,
 					torrentSearchController = torrentSearchController,
 					playbackController = playbackController,
@@ -112,10 +120,13 @@ class MainActivity : ComponentActivity() {
 			}
 		}
 
-		intent.getStringExtra(EXTRA_MAGNET)
-			?.trim()
-			?.takeIf { it.isNotEmpty() }
-			?.let(::startMagnet)
+		handleIntent(intent)
+	}
+
+	override fun onNewIntent(intent: Intent) {
+		super.onNewIntent(intent)
+		setIntent(intent)
+		handleIntent(intent)
 	}
 
 	override fun onStop() {
@@ -147,6 +158,13 @@ class MainActivity : ComponentActivity() {
 		}
 
 		super.onDestroy()
+	}
+
+	private fun handleIntent(intent: Intent) {
+		intent.getStringExtra(EXTRA_MAGNET)
+			?.trim()
+			?.takeIf { it.isNotEmpty() }
+			?.let(::startMagnet)
 	}
 
 	private fun startMagnet(magnet: String) {
