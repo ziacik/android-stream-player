@@ -20,6 +20,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import sk.ziacik.androidstreamplayer.catalog.Movie
+import sk.ziacik.androidstreamplayer.catalog.MovieBrowseController
 import sk.ziacik.androidstreamplayer.catalog.MovieCatalog
 import sk.ziacik.androidstreamplayer.catalog.MovieExternalIds
 import sk.ziacik.androidstreamplayer.catalog.MovieSearchController
@@ -46,7 +47,7 @@ class KinoAppTest {
 	}
 
 	@Test
-	fun movieCatalogIsEntryPointAndFlowReturnsFromPlayerToDetail() {
+	fun homeDashboardIsEntryPointAndSearchIsOneActionAway() {
 		val catalog = FakeCatalog
 		val movieSearchController = MovieSearchController(
 			scope = scope,
@@ -66,6 +67,7 @@ class KinoAppTest {
 
 		composeRule.setContent {
 			KinoApp(
+				movieBrowseController = movieBrowseController(),
 				movieSearchController = movieSearchController,
 				torrentSearchController = torrentSearchController,
 				playbackController = playbackController,
@@ -82,6 +84,8 @@ class KinoAppTest {
 			)
 		}
 
+		composeRule.onNodeWithTag("home-dashboard").assertIsDisplayed()
+		composeRule.onNodeWithTag("home-search-nav").assertIsDisplayed().performClick()
 		composeRule.onNodeWithTag("movie-search-input").assertIsDisplayed()
 		composeRule.onNodeWithTag("movie-search-input").performTextInput("Matrix")
 		composeRule.waitUntil(timeoutMillis = 5_000) {
@@ -144,6 +148,7 @@ class KinoAppTest {
 
 		composeRule.setContent {
 			KinoApp(
+				movieBrowseController = movieBrowseController(),
 				movieSearchController = movieSearchController,
 				torrentSearchController = torrentSearchController,
 				playbackController = playbackController,
@@ -173,6 +178,11 @@ class KinoAppTest {
 			assertEquals(0, torrentSearchCalls)
 		}
 	}
+
+	private fun movieBrowseController() = MovieBrowseController(
+		scope = scope,
+		loadTrending = { listOf(matrix()) },
+	)
 
 	private fun torrent(request: MovieTorrentSearchRequest) = TorrentSearchResult(
 		id = "hit-1",
