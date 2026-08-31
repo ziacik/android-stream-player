@@ -216,9 +216,9 @@ class KinoAppTest {
 			composeRule.onAllNodes(hasTestTag(firstTrendingTag)).fetchSemanticsNodes().isNotEmpty()
 		}
 
-		composeRule.onNode(
+		composeRule.onAllNodes(
 			hasScrollAction() and hasAnyDescendant(hasTestTag(firstTrendingTag)),
-		).performScrollToIndex(targetIndex)
+		)[1].performScrollToIndex(targetIndex)
 		composeRule.waitUntil(timeoutMillis = 5_000) {
 			composeRule.onAllNodes(hasTestTag(targetTag)).fetchSemanticsNodes().isNotEmpty()
 		}
