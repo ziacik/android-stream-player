@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.requestFocus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,7 +52,7 @@ class HomeFocusRegressionTest {
 			)
 		}
 
-		waitUntilFocused("resume-watching-603")
+		focusResumeFromSearch()
 		composeRule.onNodeWithTag("resume-watching-603")
 			.performKeyInput { pressKey(Key.DirectionRight) }
 		composeRule.onNodeWithTag("resume-watching-603").assertIsFocused()
@@ -76,7 +77,7 @@ class HomeFocusRegressionTest {
 			)
 		}
 
-		waitUntilFocused("resume-watching-603")
+		focusResumeFromSearch()
 		composeRule.onNodeWithTag("resume-watching-603")
 			.performSemanticsAction(SemanticsActions.OnLongClick) { it.invoke() }
 		composeRule.onNodeWithTag("resume-watching-actions").assertExists()
@@ -86,6 +87,14 @@ class HomeFocusRegressionTest {
 			composeRule.onAllNodes(hasTestTag("resume-watching-603")).fetchSemanticsNodes().isEmpty()
 		}
 		waitUntilFocused("home-trending-1054867")
+	}
+
+	private fun focusResumeFromSearch() {
+		composeRule.onNodeWithTag("home-search-nav")
+			.requestFocus()
+			.assertIsFocused()
+			.performKeyInput { pressKey(Key.DirectionDown) }
+		waitUntilFocused("resume-watching-603")
 	}
 
 	private fun waitUntilFocused(tag: String) {
