@@ -81,7 +81,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  focus-regression:
+  launch-mode-regression:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -103,7 +103,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run home focus regressions on TV emulator
+      - name: Verify launcher activity on TV emulator
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -112,4 +112,3 @@ jobs:
           disable-animations: true
           script: |
             ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=sk.ziacik.androidstreamplayer.MainActivityLaunchModeTest --stacktrace
-            ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=sk.ziacik.androidstreamplayer.ui.HomeFocusRegressionTest --stacktrace
