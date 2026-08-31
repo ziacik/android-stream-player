@@ -84,6 +84,14 @@ fun HomeScreen(
 	val firstResumeRequester = resumeWatching.firstOrNull()?.let { resumeRequesters[it.movie.tmdbId] }
 	val firstTrendingRequester = state.trending.firstOrNull()?.let { trendingRequesters[it.tmdbId] }
 	val firstContentRequester = firstResumeRequester ?: firstTrendingRequester
+	var lastResumeMovieId by remember(resumeIds) {
+		mutableStateOf(resumeWatching.firstOrNull()?.movie?.tmdbId)
+	}
+	var lastTrendingMovieId by remember(trendingIds) {
+		mutableStateOf(state.trending.firstOrNull()?.tmdbId)
+	}
+	val resumeDestination = lastResumeMovieId?.let(resumeRequesters::get) ?: firstResumeRequester
+	val trendingDestination = lastTrendingMovieId?.let(trendingRequesters::get) ?: firstTrendingRequester
 	var initialFocusHandled by remember { mutableStateOf(false) }
 	var resumeActionEntry by remember { mutableStateOf<WatchProgressEntry?>(null) }
 
@@ -149,8 +157,11 @@ fun HomeScreen(
 							HomeResumeWatchingRow(
 								entries = resumeWatching,
 								focusRequesters = resumeRequesters,
-								upFocusRequester = searchRequester,
-								downFocusRequester = firstTrendingRequester,
+								onMoveUp = { searchRequester.requestFocus() },
+								onMoveDown = trendingDestination?.let { destination ->
+									{ destination.requestFocus() }
+								},
+								onFocused = { lastResumeMovieId = it.movie.tmdbId },
 								onResume = onResumeWatching,
 								onCancelStarting = onCancelResumeWatching,
 								onOpenActions = { resumeActionEntry = it },
@@ -163,8 +174,11 @@ fun HomeScreen(
 						HomeTrendingRow(
 							movies = state.trending,
 							focusRequesters = trendingRequesters,
-							upFocusRequester = firstResumeRequester ?: searchRequester,
-							downFocusRequester = null,
+							onMoveUp = {
+								(resumeDestination ?: searchRequester).requestFocus()
+							},
+							onMoveDown = null,
+							onFocused = { lastTrendingMovieId = it.tmdbId },
 							isLoading = state.isLoading,
 							errorMessage = state.errorMessage,
 							onRetry = controller::retry,
@@ -235,8 +249,9 @@ private fun HomeHeader(
 private fun HomeTrendingRow(
 	movies: List<Movie>,
 	focusRequesters: Map<Int, FocusRequester>,
-	upFocusRequester: FocusRequester?,
-	downFocusRequester: FocusRequester?,
+	onMoveUp: () -> Unit,
+	onMoveDown: (() -> Unit)?,
+	onFocused: (Movie) -> Unit,
 	isLoading: Boolean,
 	errorMessage: String?,
 	onRetry: () -> Unit,
@@ -264,11 +279,14 @@ private fun HomeTrendingRow(
 							movie = movie,
 							onClick = { onMovieSelected(movie) },
 							focusRequester = focusRequesters.getValue(movie.tmdbId),
-							onFocused = {},
-							upFocusRequester = upFocusRequester,
-							downFocusRequester = downFocusRequester,
+							onFocused = { onFocused(movie) },
 							testTag = "home-trending-${movie.tmdbId}",
-							modifier = Modifier.width(HOME_POSTER_WIDTH),
+							modifier = Modifier
+								.width(HOME_POSTER_WIDTH)
+								.verticalFocusNavigation(
+									onMoveUp = onMoveUp,
+									onMoveDown = onMoveDown,
+								),
 						)
 					}
 				}
@@ -309,8 +327,9 @@ private fun HomeTrendingRow(
 private fun HomeResumeWatchingRow(
 	entries: List<WatchProgressEntry>,
 	focusRequesters: Map<Int, FocusRequester>,
-	upFocusRequester: FocusRequester,
-	downFocusRequester: FocusRequester?,
+	onMoveUp: () -> Unit,
+	onMoveDown: (() -> Unit)?,
+	onFocused: (WatchProgressEntry) -> Unit,
 	onResume: (WatchProgressEntry) -> Unit,
 	onCancelStarting: () -> Unit,
 	onOpenActions: (WatchProgressEntry) -> Unit,
@@ -334,8 +353,9 @@ private fun HomeResumeWatchingRow(
 				HomeResumeWatchingCard(
 					entry = entry,
 					focusRequester = focusRequesters.getValue(entry.movie.tmdbId),
-					upFocusRequester = upFocusRequester,
-					downFocusRequester = downFocusRequester,
+					onMoveUp = onMoveUp,
+					onMoveDown = onMoveDown,
+					onFocused = { onFocused(entry) },
 					onResume = { onResume(entry) },
 					onCancelStarting = onCancelStarting,
 					onOpenActions = { onOpenActions(entry) },
@@ -350,8 +370,9 @@ private fun HomeResumeWatchingRow(
 private fun HomeResumeWatchingCard(
 	entry: WatchProgressEntry,
 	focusRequester: FocusRequester,
-	upFocusRequester: FocusRequester,
-	downFocusRequester: FocusRequester?,
+	onMoveUp: () -> Unit,
+	onMoveDown: (() -> Unit)?,
+	onFocused: () -> Unit,
 	onResume: () -> Unit,
 	onCancelStarting: () -> Unit,
 	onOpenActions: () -> Unit,
@@ -414,11 +435,14 @@ private fun HomeResumeWatchingCard(
 				}
 			},
 			focusRequester = focusRequester,
-			onFocused = {},
-			upFocusRequester = upFocusRequester,
-			downFocusRequester = downFocusRequester,
+			onFocused = onFocused,
 			testTag = "resume-watching-${entry.movie.tmdbId}",
-			modifier = Modifier.fillMaxWidth(),
+			modifier = Modifier
+				.fillMaxWidth()
+				.verticalFocusNavigation(
+					onMoveUp = onMoveUp,
+					onMoveDown = onMoveDown,
+				),
 		)
 
 		LinearProgressIndicator(
@@ -444,6 +468,37 @@ private fun HomeResumeWatchingCard(
 					strokeWidth = 3.dp,
 				)
 			}
+		}
+	}
+}
+
+private fun Modifier.verticalFocusNavigation(
+	onMoveUp: (() -> Unit)?,
+	onMoveDown: (() -> Unit)?,
+): Modifier = onPreviewKeyEvent { event ->
+	if (event.type != KeyEventType.KeyDown) {
+		false
+	} else {
+		when (event.key) {
+			Key.DirectionUp -> {
+				if (onMoveUp != null) {
+					onMoveUp()
+					true
+				} else {
+					false
+				}
+			}
+
+			Key.DirectionDown -> {
+				if (onMoveDown != null) {
+					onMoveDown()
+					true
+				} else {
+					false
+				}
+			}
+
+			else -> false
 		}
 	}
 }
