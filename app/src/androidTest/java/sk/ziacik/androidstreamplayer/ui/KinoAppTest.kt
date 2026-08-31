@@ -151,6 +151,53 @@ class KinoAppTest {
 	}
 
 	@Test
+	fun dpadCanMoveDownAgainAfterReturningFromScrolledTrendingRow() {
+		val entry = WatchProgressEntry(
+			movie = matrix(),
+			result = TorrentSearchResult(
+				id = "stored-hit",
+				title = "The.Matrix.1999.1080p.Stored",
+				magnetUri = "magnet:?xt=urn:btih:stored-matrix",
+				quality = "1080p",
+			),
+			positionMs = 300_000L,
+			durationMs = 600_000L,
+			updatedAtEpochMs = 123L,
+		)
+
+		composeRule.setContent {
+			HomeScreen(
+				controller = movieBrowseController(listOf(odyssey(), interstellar())),
+				resumeWatching = listOf(entry),
+				onMovieSelected = {},
+				onResumeWatching = {},
+				onCancelResumeWatching = {},
+				onRemoveResumeWatching = {},
+				startingResumeMovieId = null,
+				onSearch = {},
+			)
+		}
+
+		composeRule.waitUntil(timeoutMillis = 5_000) {
+			composeRule.onAllNodes(hasTestTag("home-trending-157336")).fetchSemanticsNodes().isNotEmpty()
+		}
+
+		composeRule.onNodeWithTag("resume-watching-603")
+			.assertIsFocused()
+			.performKeyInput { pressKey(Key.DirectionDown) }
+		composeRule.onNodeWithTag("home-trending-1054867")
+			.assertIsFocused()
+			.performKeyInput { pressKey(Key.DirectionRight) }
+		composeRule.onNodeWithTag("home-trending-157336")
+			.assertIsFocused()
+			.performKeyInput { pressKey(Key.DirectionUp) }
+		composeRule.onNodeWithTag("resume-watching-603")
+			.assertIsFocused()
+			.performKeyInput { pressKey(Key.DirectionDown) }
+		composeRule.onNodeWithTag("home-trending-157336").assertIsFocused()
+	}
+
+	@Test
 	fun resumeWatchingStartsStoredTorrentAtStoredPositionWithoutSearchingAgain() {
 		val entry = WatchProgressEntry(
 			movie = matrix(),
@@ -256,6 +303,17 @@ class KinoAppTest {
 		releaseYear = 2026,
 		overview = "Odysseus journeys home.",
 		voteAverage = 7.5,
+		posterPath = null,
+		backdropPath = null,
+	)
+
+	private fun interstellar() = Movie(
+		tmdbId = 157_336,
+		title = "Interstellar",
+		originalTitle = "Interstellar",
+		releaseYear = 2014,
+		overview = "Explorers travel through a wormhole in space.",
+		voteAverage = 8.5,
 		posterPath = null,
 		backdropPath = null,
 	)
