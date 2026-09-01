@@ -1,6 +1,7 @@
 package sk.ziacik.androidstreamplayer.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -43,8 +44,11 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -52,6 +56,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +81,7 @@ fun HomeScreen(
 	homeState: HomeScreenState = rememberHomeScreenState(),
 ) {
 	val state by controller.state.collectAsState()
+	val homeRequester = remember { FocusRequester() }
 	val searchRequester = remember { FocusRequester() }
 	val resumeIds = resumeWatching.map { it.movie.tmdbId }
 	val resumeRequesters = remember(resumeIds) {
@@ -91,6 +97,7 @@ fun HomeScreen(
 	val trendingDestination = homeState.lastTrendingMovieId?.let(trendingRequesters::get) ?: firstTrendingRequester
 	val contentDestination = resumeDestination ?: trendingDestination
 	val restoredFocusRequester = when (val target = homeState.focusedTarget) {
+		HomeFocusTarget.Home -> homeRequester
 		HomeFocusTarget.Search -> searchRequester
 		is HomeFocusTarget.Resume -> resumeRequesters[target.movieId]
 		is HomeFocusTarget.Trending -> trendingRequesters[target.movieId]
@@ -184,6 +191,7 @@ fun HomeScreen(
 
 		homeState.lastResumeMovieId = remainingResumeId
 		when (destinationTarget) {
+			HomeFocusTarget.Home -> homeState.focusedTarget = HomeFocusTarget.Home
 			HomeFocusTarget.Search -> homeState.focusedTarget = HomeFocusTarget.Search
 			is HomeFocusTarget.Resume -> homeState.focusedTarget = destinationTarget
 			is HomeFocusTarget.Trending -> {
@@ -306,9 +314,12 @@ fun HomeScreen(
 			) {
 				Spacer(Modifier.height(32.dp))
 				HomeHeader(
+					homeRequester = homeRequester,
 					searchRequester = searchRequester,
 					downFocusRequester = contentDestination,
-					onFocused = { homeState.focusedTarget = HomeFocusTarget.Search },
+					onHomeFocused = { homeState.focusedTarget = HomeFocusTarget.Home },
+					onSearchFocused = { homeState.focusedTarget = HomeFocusTarget.Search },
+					onHome = { homeState.focusedTarget = HomeFocusTarget.Home },
 					onSearch = {
 						homeState.focusedTarget = HomeFocusTarget.Search
 						onSearch()
@@ -387,46 +398,105 @@ fun HomeScreen(
 
 @Composable
 private fun HomeHeader(
+	homeRequester: FocusRequester,
 	searchRequester: FocusRequester,
 	downFocusRequester: FocusRequester?,
-	onFocused: () -> Unit,
+	onHomeFocused: () -> Unit,
+	onSearchFocused: () -> Unit,
+	onHome: () -> Unit,
 	onSearch: () -> Unit,
 ) {
+	var homeFocused by remember { mutableStateOf(false) }
+	var searchFocused by remember { mutableStateOf(false) }
+
 	Row(
 		modifier = Modifier.fillMaxWidth(),
 		verticalAlignment = Alignment.CenterVertically,
-		horizontalArrangement = Arrangement.SpaceBetween,
+		horizontalArrangement = Arrangement.spacedBy(28.dp),
 	) {
-		Row(
-			verticalAlignment = Alignment.CenterVertically,
-			horizontalArrangement = Arrangement.spacedBy(28.dp),
+		Text(
+			text = "KINO",
+			fontWeight = FontWeight.Black,
+			letterSpacing = 3.sp,
+			color = MaterialTheme.colorScheme.secondary,
+		)
+		TextButton(
+			onClick = onHome,
+			modifier = Modifier
+				.testTag("home-home-nav")
+				.focusRequester(homeRequester)
+				.onFocusChanged {
+					homeFocused = it.isFocused
+					if (it.isFocused) onHomeFocused()
+				}
+				.focusProperties {
+					left = FocusRequester.Cancel
+					right = searchRequester
+					down = downFocusRequester ?: FocusRequester.Default
+				},
 		) {
-			Text(
-				text = "KINO",
-				fontWeight = FontWeight.Black,
-				letterSpacing = 3.sp,
-				color = MaterialTheme.colorScheme.secondary,
-			)
 			Text(
 				text = "Home",
 				style = MaterialTheme.typography.titleMedium,
 				fontWeight = FontWeight.SemiBold,
-				color = MaterialTheme.colorScheme.onBackground,
+				color = if (homeFocused) {
+					MaterialTheme.colorScheme.secondary
+				} else {
+					MaterialTheme.colorScheme.onBackground
+				},
 			)
 		}
-
 		Button(
 			onClick = onSearch,
 			modifier = Modifier
+				.size(48.dp)
 				.testTag("home-search-nav")
+				.semantics { contentDescription = "Search" }
 				.focusRequester(searchRequester)
-				.onFocusChanged { if (it.isFocused) onFocused() }
+				.graphicsLayer {
+					val scale = if (searchFocused) 1.08f else 1f
+					scaleX = scale
+					scaleY = scale
+				}
+				.onFocusChanged {
+					searchFocused = it.isFocused
+					if (it.isFocused) onSearchFocused()
+				}
 				.focusProperties {
+					left = homeRequester
+					right = FocusRequester.Cancel
 					down = downFocusRequester ?: FocusRequester.Default
 				},
+			contentPadding = PaddingValues(0.dp),
 		) {
-			Text("Search")
+			SearchGlyph()
 		}
+	}
+}
+
+@Composable
+private fun SearchGlyph() {
+	val color = MaterialTheme.colorScheme.onPrimary
+	Canvas(modifier = Modifier.size(21.dp)) {
+		val strokeWidth = 2.2.dp.toPx()
+		val radius = size.minDimension * 0.27f
+		val center = Offset(size.width * 0.42f, size.height * 0.42f)
+		drawCircle(
+			color = color,
+			radius = radius,
+			center = center,
+			style = Stroke(width = strokeWidth),
+		)
+		drawLine(
+			color = color,
+			start = Offset(
+				center.x + radius * 0.7f,
+				center.y + radius * 0.7f,
+			),
+			end = Offset(size.width * 0.84f, size.height * 0.84f),
+			strokeWidth = strokeWidth,
+			cap = StrokeCap.Round,
+		)
 	}
 }
 

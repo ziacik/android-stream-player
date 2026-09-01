@@ -95,7 +95,10 @@ fun KinoApp(
 				},
 				onRemoveResumeWatching = watchProgressRepository::remove,
 				startingResumeMovieId = startingResumeMovieId,
-				onSearch = { rootScreen = KinoRootScreen.Search },
+				onSearch = {
+					movieSearchController.setFocusedMovie(null)
+					rootScreen = KinoRootScreen.Search
+				},
 				homeState = homeScreenState,
 			)
 		}
