@@ -4,9 +4,10 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.HttpUrl
@@ -246,28 +247,28 @@ internal class TorrServerClient(
         request: Request,
         onStartupStats: (TorrentStartupStats) -> Unit,
     ): TorrServerHttpResponse = coroutineScope {
-        val preload = async {
-            transport.execute(request)
-        }
         val statusPollIntervalMs = maxOf(1L, pollIntervalMs * STARTUP_STATUS_POLL_FACTOR)
-
-        while (preload.isActive) {
-            delay(statusPollIntervalMs)
-            if (!preload.isActive) break
-
-            try {
-                val torrent = torrentRequest(
-                    JSONObject()
-                        .put("action", "get")
-                        .put("hash", hash),
-                )
-                onStartupStats(torrent.startupStats)
-            } catch (_: IOException) {
-                // Telemetry is best effort; the preload response remains authoritative.
+        val poller = launch {
+            while (true) {
+                delay(statusPollIntervalMs)
+                try {
+                    val torrent = torrentRequest(
+                        JSONObject()
+                            .put("action", "get")
+                            .put("hash", hash),
+                    )
+                    onStartupStats(torrent.startupStats)
+                } catch (_: IOException) {
+                    // Telemetry is best effort; the preload response remains authoritative.
+                }
             }
         }
 
-        preload.await()
+        try {
+            transport.execute(request)
+        } finally {
+            poller.cancelAndJoin()
+        }
     }
 
     private suspend fun torrentRequest(body: JSONObject): TorrServerTorrentInfo {
