@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -76,6 +78,7 @@ private val PlayerBufferedTrack = Color.White.copy(alpha = 0.34f)
 @Composable
 fun KinoPlayerScreen(
     player: Player,
+    movieTitle: String,
     result: TorrentSearchResult?,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
@@ -381,8 +384,10 @@ fun KinoPlayerScreen(
 
         if (overlayVisible) {
             KinoPlayerOverlay(
-                title = result?.title ?: "Now playing",
-                quality = result?.quality,
+                title = movieTitle,
+                badges = result?.releaseInfo
+                    ?.let(::torrentReleaseBadgeLabels)
+                    .orEmpty(),
                 positionMs = positionMs,
                 durationMs = durationMs,
                 bufferedPositionMs = bufferedPositionMs,
@@ -461,7 +466,7 @@ fun KinoPlayerScreen(
 @Composable
 internal fun KinoPlayerOverlay(
     title: String,
-    quality: String?,
+    badges: List<String>,
     positionMs: Long,
     durationMs: Long?,
     bufferedPositionMs: Long,
@@ -511,21 +516,18 @@ internal fun KinoPlayerOverlay(
                 .fillMaxWidth()
                 .padding(horizontal = 56.dp, vertical = 34.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = title,
-                    modifier = Modifier.weight(1f),
-                    color = Color.White,
-                    fontSize = 26.sp,
-                    lineHeight = 30.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                quality?.let { PlayerQualityBadge(it) }
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 26.sp,
+                lineHeight = 30.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (badges.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                PlayerReleaseBadges(badges)
             }
 
             Spacer(Modifier.height(14.dp))
@@ -599,18 +601,28 @@ internal fun KinoPlayerOverlay(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PlayerQualityBadge(quality: String) {
-    Text(
-        text = quality,
-        modifier = Modifier
-            .background(PlayerChampagne.copy(alpha = 0.12f), RoundedCornerShape(100.dp))
-            .border(1.dp, PlayerChampagne.copy(alpha = 0.34f), RoundedCornerShape(100.dp))
-            .padding(horizontal = 11.dp, vertical = 4.dp),
-        color = PlayerChampagne,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Bold,
-    )
+private fun PlayerReleaseBadges(badges: List<String>) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        badges.forEach { badge ->
+            Text(
+                text = badge,
+                modifier = Modifier
+                    .background(PlayerChampagne.copy(alpha = 0.12f), RoundedCornerShape(100.dp))
+                    .border(1.dp, PlayerChampagne.copy(alpha = 0.34f), RoundedCornerShape(100.dp))
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+                color = PlayerChampagne,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp,
+            )
+        }
+    }
 }
 
 @Composable
