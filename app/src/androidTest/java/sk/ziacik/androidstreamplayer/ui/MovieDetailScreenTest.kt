@@ -2,11 +2,12 @@ package sk.ziacik.androidstreamplayer.ui
 
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.SemanticsNodeInteraction
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -143,7 +144,7 @@ class MovieDetailScreenTest {
 		composeRule.waitUntil(timeoutMillis = 5_000) {
 			composeRule.onAllNodes(hasTestTag("torrent-unknown")).fetchSemanticsNodes().isNotEmpty()
 		}
-		composeRule.onNodeWithText("AUTO").assertDoesNotExist()
+		composeRule.onAllNodesWithText("AUTO").assertCountEquals(0)
 	}
 
 	@Test
