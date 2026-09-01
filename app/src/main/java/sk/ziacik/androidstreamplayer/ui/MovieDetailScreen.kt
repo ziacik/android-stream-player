@@ -139,6 +139,7 @@ fun MovieDetailScreen(
 					state = torrentState,
 					startingResultId = playbackState.startingResultId,
 					startupErrorMessage = playbackState.startupErrorMessage,
+					startupStats = playbackState.startupStats,
 					onPlay = onPlay,
 					onRetry = torrentController::retry,
 					modifier = Modifier
