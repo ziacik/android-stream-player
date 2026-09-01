@@ -12,11 +12,11 @@ class KinoPlayerOverlayTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun overlayShowsMovieProgressAndTvControls() {
+    fun overlayShowsMovieTitleReleaseBadgesProgressAndTvControls() {
         composeRule.setContent {
             KinoPlayerOverlay(
-                title = "Alien",
-                quality = "2160p",
+                title = "Dune: Part Two",
+                badges = listOf("4K", "REMUX", "DV", "HDR10", "HEVC", "TrueHD", "Atmos", "7.1", "ENG", "2024"),
                 positionMs = 754_000L,
                 durationMs = 3_723_000L,
                 bufferedPositionMs = 1_200_000L,
@@ -26,8 +26,10 @@ class KinoPlayerOverlayTest {
             )
         }
 
-        composeRule.onNodeWithText("Alien").assertIsDisplayed()
-        composeRule.onNodeWithText("2160p").assertIsDisplayed()
+        composeRule.onNodeWithText("Dune: Part Two").assertIsDisplayed()
+        listOf("4K", "REMUX", "DV", "HDR10", "HEVC", "TrueHD", "Atmos", "7.1", "ENG", "2024").forEach { badge ->
+            composeRule.onNodeWithText(badge).assertIsDisplayed()
+        }
         composeRule.onNodeWithText("12:34").assertIsDisplayed()
         composeRule.onNodeWithText("1:02:03").assertIsDisplayed()
         composeRule.onNodeWithTag("player-progress").assertIsDisplayed()
@@ -41,7 +43,7 @@ class KinoPlayerOverlayTest {
         composeRule.setContent {
             KinoPlayerOverlay(
                 title = "Alien",
-                quality = "2160p",
+                badges = emptyList(),
                 positionMs = 754_000L,
                 durationMs = 3_723_000L,
                 bufferedPositionMs = 1_200_000L,
