@@ -42,12 +42,14 @@ import java.util.Locale
 import sk.ziacik.androidstreamplayer.search.TorrentReleaseInfo
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 import sk.ziacik.androidstreamplayer.search.TorrentSearchUiState
+import sk.ziacik.androidstreamplayer.torrent.TorrentStartupStats
 
 @Composable
 fun TorrentResults(
 	state: TorrentSearchUiState,
 	startingResultId: String?,
 	startupErrorMessage: String?,
+	startupStats: TorrentStartupStats?,
 	onPlay: (TorrentSearchResult) -> Unit,
 	onRetry: () -> Unit,
 	modifier: Modifier = Modifier,
@@ -150,6 +152,7 @@ fun TorrentResults(
 						TorrentResultRow(
 							result = result,
 							isStarting = isStarting,
+							startupStats = startupStats.takeIf { isStarting },
 							onClick = {
 								if (!isStarting) onPlay(result)
 							},
@@ -170,6 +173,7 @@ fun TorrentResults(
 private fun TorrentResultRow(
 	result: TorrentSearchResult,
 	isStarting: Boolean,
+	startupStats: TorrentStartupStats?,
 	onClick: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
@@ -238,6 +242,15 @@ private fun TorrentResultRow(
 						text = result.source ?: "Unknown source",
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+					)
+				}
+				startupStats?.let { stats ->
+					Text(
+						text = formatTorrentStartupStats(stats),
+						modifier = Modifier.testTag("torrent-startup-stats-${result.id}"),
+						style = MaterialTheme.typography.bodySmall,
+						fontWeight = FontWeight.SemiBold,
+						color = MaterialTheme.colorScheme.secondary,
 					)
 				}
 			}

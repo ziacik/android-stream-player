@@ -4,7 +4,10 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.HttpUrl
@@ -84,6 +87,7 @@ internal class TorrServerClient(
     suspend fun prepareStreamUrl(
         magnet: String,
         timeoutMs: Long = METADATA_TIMEOUT_MS,
+        onStartupStats: (TorrentStartupStats) -> Unit = {},
     ): String {
         require(timeoutMs > 0) { "timeoutMs must be positive" }
 
@@ -96,11 +100,16 @@ internal class TorrServerClient(
         if (added.hash.isBlank()) {
             throw IOException("TorrServer did not return torrent hash")
         }
+        onStartupStats(added.startupStats)
 
         val ready: TorrServerTorrentInfo = if (added.files.isNotEmpty()) {
             added
         } else {
-            awaitTorrentFiles(added.hash, timeoutMs)
+            awaitTorrentFiles(
+                hash = added.hash,
+                timeoutMs = timeoutMs,
+                onStartupStats = onStartupStats,
+            )
         }
 
         val file = ready.files
@@ -110,8 +119,9 @@ internal class TorrServerClient(
             ?: throw IOException("Torrent contains no playable video file")
         val fileName = File(file.path).name
 
-        val preloadResponse = transport.execute(
-            Request.Builder()
+        val preloadResponse = preloadWithStatus(
+            hash = ready.hash,
+            request = Request.Builder()
                 .url(
                     streamRequestUrl(
                         link = ready.hash,
@@ -122,6 +132,7 @@ internal class TorrServerClient(
                 )
                 .get()
                 .build(),
+            onStartupStats = onStartupStats,
         )
         if (!preloadResponse.isSuccessful) {
             throw IOException("TorrServer preload failed with HTTP ${preloadResponse.code}")
@@ -210,6 +221,7 @@ internal class TorrServerClient(
     private suspend fun awaitTorrentFiles(
         hash: String,
         timeoutMs: Long,
+        onStartupStats: (TorrentStartupStats) -> Unit,
     ): TorrServerTorrentInfo {
         var found: TorrServerTorrentInfo? = null
         withTimeoutOrNull(timeoutMs) {
@@ -219,6 +231,7 @@ internal class TorrServerClient(
                         .put("action", "get")
                         .put("hash", hash),
                 )
+                onStartupStats(torrent.startupStats)
                 if (torrent.files.isNotEmpty()) {
                     found = torrent
                 } else {
@@ -227,6 +240,35 @@ internal class TorrServerClient(
             }
         }
         return found ?: throw IOException("TorrServer metadata timeout")
+    }
+
+    private suspend fun preloadWithStatus(
+        hash: String,
+        request: Request,
+        onStartupStats: (TorrentStartupStats) -> Unit,
+    ): TorrServerHttpResponse = coroutineScope {
+        val statusPollIntervalMs = maxOf(1L, pollIntervalMs * STARTUP_STATUS_POLL_FACTOR)
+        val poller = launch {
+            while (true) {
+                delay(statusPollIntervalMs)
+                try {
+                    val torrent = torrentRequest(
+                        JSONObject()
+                            .put("action", "get")
+                            .put("hash", hash),
+                    )
+                    onStartupStats(torrent.startupStats)
+                } catch (_: IOException) {
+                    // Telemetry is best effort; the preload response remains authoritative.
+                }
+            }
+        }
+
+        try {
+            transport.execute(request)
+        } finally {
+            poller.cancelAndJoin()
+        }
     }
 
     private suspend fun torrentRequest(body: JSONObject): TorrServerTorrentInfo {
@@ -260,6 +302,14 @@ internal class TorrServerClient(
             TorrServerTorrentInfo(
                 hash = json.optString("hash"),
                 files = files,
+                startupStats = TorrentStartupStats(
+                    activePeers = json.optInt("active_peers"),
+                    totalPeers = json.optInt("total_peers"),
+                    connectedSeeders = json.optInt("connected_seeders"),
+                    downloadSpeedBytesPerSecond = json.optDouble("download_speed", 0.0),
+                    preloadedBytes = json.optLong("preloaded_bytes"),
+                    preloadSizeBytes = json.optLong("preload_size"),
+                ),
             )
         } catch (error: Exception) {
             throw IOException("Invalid TorrServer torrent response", error)
@@ -299,6 +349,7 @@ internal class TorrServerClient(
     private data class TorrServerTorrentInfo(
         val hash: String,
         val files: List<TorrServerFileInfo>,
+        val startupStats: TorrentStartupStats,
     )
 
     private data class TorrServerFileInfo(
@@ -311,6 +362,7 @@ internal class TorrServerClient(
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         const val METADATA_TIMEOUT_MS = 90_000L
         const val TORRENT_DISCONNECT_TIMEOUT_SECONDS = 120
+        const val STARTUP_STATUS_POLL_FACTOR = 5L
         val VIDEO_EXTENSIONS = setOf("mkv", "mp4", "m4v", "webm", "ts")
     }
 }
