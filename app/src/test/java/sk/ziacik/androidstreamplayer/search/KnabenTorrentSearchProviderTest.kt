@@ -40,7 +40,7 @@ class KnabenTorrentSearchProviderTest {
 	}
 
 	@Test
-	fun `movie search maps Knaben hits to torrent results and infers quality`() = runTest {
+	fun `movie search maps Knaben hits without parsing release metadata`() = runTest {
 		val transport = RecordingTorrentSearchTransport(
 			response = TorrentSearchHttpResponse(
 				code = 200,
@@ -70,7 +70,6 @@ class KnabenTorrentSearchProviderTest {
 				id = "hit-1",
 				title = "Dune.Part.Two.2024.2160p.WEB-DL.DDP5.1.H.265",
 				magnetUri = "magnet:?xt=urn:btih:ABC123&dn=Dune.Part.Two",
-				quality = "2160p",
 				sizeBytes = 18_790_000_000,
 				seeders = 184,
 				source = "The Pirate Bay",
