@@ -112,6 +112,7 @@ class MainActivity : ComponentActivity() {
 						)
 						KinoPlayerScreen(
 							player = playerPort.player,
+							movieTitle = movie.title,
 							result = result,
 							onExit = onExit,
 						)
