@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.runTest
 import okhttp3.Request
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -79,6 +80,48 @@ class TorrServerStartupPollingTest {
 			releasePreload.complete(Unit)
 			preparing.cancel()
 		}
+	}
+
+	@Test
+	fun `completed preload does not wait for the next telemetry poll`() = runTest {
+		val requests = mutableListOf<Request>()
+		val transport = object : TorrServerHttpTransport {
+			override suspend fun execute(request: Request): TorrServerHttpResponse {
+				requests += request
+				return when {
+					request.url.encodedPath == "/torrents" && request.action() == "add" -> {
+						TorrServerHttpResponse(
+							code = 200,
+							body = """{"hash":"hash123","file_stats":[{"id":7,"path":"movie.mkv","length":9000}]}""",
+						)
+					}
+
+					request.url.encodedPath.startsWith("/stream/") &&
+						request.url.queryParameterNames.contains("preload") -> {
+						TorrServerHttpResponse(code = 200, body = "")
+					}
+
+					request.url.encodedPath == "/torrents" && request.action() == "get" -> {
+						TorrServerHttpResponse(code = 200, body = """{"hash":"hash123"}""")
+					}
+
+					else -> TorrServerHttpResponse(code = 500, body = "")
+				}
+			}
+		}
+		val client = TorrServerClient(
+			transport = transport,
+			pollIntervalMs = 200,
+		)
+		val before = testScheduler.currentTime
+
+		client.prepareStreamUrl(
+			magnet = "magnet:?xt=urn:btih:abcdef&dn=Video",
+			timeoutMs = 1_000,
+		)
+
+		assertEquals(before, testScheduler.currentTime)
+		assertFalse(requests.any { it.url.encodedPath == "/torrents" && it.action() == "get" })
 	}
 
 	private fun Request.action(): String? {
