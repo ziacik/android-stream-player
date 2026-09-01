@@ -7,15 +7,17 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import okhttp3.Request
 import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TorrServerStartupPollingTest {
 	@Test
-	fun `prepare polls torrent status while preload is still running`() = runTest {
+	fun `prepare polls and reports torrent status while preload is still running`() = runTest {
 		val preloadStarted = CompletableDeferred<Unit>()
 		val releasePreload = CompletableDeferred<Unit>()
 		val requests = mutableListOf<Request>()
+		val reportedStats = mutableListOf<TorrentStartupStats>()
 		val transport = object : TorrServerHttpTransport {
 			override suspend fun execute(request: Request): TorrServerHttpResponse {
 				requests += request
@@ -53,6 +55,7 @@ class TorrServerStartupPollingTest {
 			client.prepareStreamUrl(
 				magnet = "magnet:?xt=urn:btih:abcdef&dn=Video",
 				timeoutMs = 1_000,
+				onStartupStats = { reportedStats += it },
 			)
 		}
 
@@ -65,6 +68,13 @@ class TorrServerStartupPollingTest {
 				"Expected TorrServer status to be polled while preload is blocked",
 				requests.any { it.url.encodedPath == "/torrents" && it.action() == "get" },
 			)
+			val stats = reportedStats.last()
+			assertEquals(3, stats.activePeers)
+			assertEquals(17, stats.totalPeers)
+			assertEquals(2, stats.connectedSeeders)
+			assertEquals(1_887_436.8, stats.downloadSpeedBytesPerSecond, 0.01)
+			assertEquals(25_165_824L, stats.preloadedBytes)
+			assertEquals(52_428_800L, stats.preloadSizeBytes)
 		} finally {
 			releasePreload.complete(Unit)
 			preparing.cancel()
