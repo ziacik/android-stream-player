@@ -108,7 +108,6 @@ internal class KnabenTorrentSearchProvider(
 						id = id,
 						title = title,
 						magnetUri = magnetUri,
-						quality = inferQuality(title),
 						sizeBytes = hit.optLong("bytes", -1L).takeIf { it >= 0L },
 						seeders = hit.optInt("seeders", -1).takeIf { it >= 0 },
 						source = hit.optString("cachedOrigin", "").takeIf { it.isNotBlank() },
@@ -128,15 +127,6 @@ internal class KnabenTorrentSearchProvider(
 	}
 
 	private fun TorrentSearchResult.seederCount(): Int = seeders ?: -1
-
-	private fun inferQuality(title: String): String? = when {
-		title.contains("2160p", ignoreCase = true) ||
-			title.contains("4k", ignoreCase = true) -> "2160p"
-		title.contains("1080p", ignoreCase = true) -> "1080p"
-		title.contains("720p", ignoreCase = true) -> "720p"
-		title.contains("480p", ignoreCase = true) -> "480p"
-		else -> null
-	}
 
 	private companion object {
 		const val API_URL = "https://api.knaben.org/v1"
