@@ -15,7 +15,7 @@ The user should be able to distinguish releases by video quality, source, HDR fo
 - Add a normalized `TorrentReleaseInfo` model to torrent results.
 - Parse, when present:
   - resolution: `2160p`, `1080p`, `720p`, `480p`
-  - source: `REMUX`, `BluRay`, `WEB-DL`, `WEBRip`, `HDTV`, `DVDRip`
+  - release source: `REMUX`, `BluRay`, `WEB-DL`, `WEBRip`, `HDTV`, `DVDRip`
   - video codec: `HEVC`/`H.265`, `H.264`/`AVC`, `AV1`, `MPEG-2`
   - HDR: Dolby Vision, HDR10+, HDR10, HDR
   - audio codec: TrueHD, DTS-HD MA, DTS-HD, DTS, E-AC-3/DD+, AC-3/DD, AAC, FLAC, PCM
@@ -26,7 +26,7 @@ The user should be able to distinguish releases by video quality, source, HDR fo
   - year when encoded in the release title
   - release group when it can be identified reliably
 - Show compact metadata badges in the existing torrent result rows.
-- Preserve raw torrent title, size, seeder count, and source/tracker information.
+- Preserve raw torrent title, size, seeder count, and provider/indexer source information.
 - Unit-test parser behavior with realistic release names and ambiguous inputs.
 - Update Compose UI tests for badge rendering.
 
@@ -40,7 +40,7 @@ The user should be able to distinguish releases by video quality, source, HDR fo
 
 ## Why title parsing is the primary source
 
-Knaben already provides the torrent title, size, seeder count, magnet URI, and source information, but codec/HDR/audio details are generally encoded in the release title rather than exposed as normalized API fields.
+Knaben already provides the torrent title, size, seeder count, magnet URI, and provider/indexer source information, but codec/HDR/audio details are generally encoded in the release title rather than exposed as normalized API fields.
 
 The current code already parses resolution directly inside `KnabenTorrentSearchProvider`. This design generalizes that behavior and moves it behind a reusable parser boundary.
 
@@ -64,7 +64,7 @@ search/
 └── TorrentSearchController.kt
 ```
 
-`KnabenTorrentSearchProvider` remains responsible only for obtaining and mapping provider data: ID, title, magnet, size, seeders, and source.
+`KnabenTorrentSearchProvider` remains responsible only for obtaining and mapping provider data: ID, title, magnet, size, seeders, and provider/indexer source.
 
 `TorrentReleaseParser` is a pure deterministic parser:
 
@@ -83,7 +83,7 @@ Suggested normalized model:
 ```kotlin
 data class TorrentReleaseInfo(
     val resolution: VideoResolution? = null,
-    val source: ReleaseSource? = null,
+    val releaseSource: ReleaseSource? = null,
     val videoCodec: VideoCodec? = null,
     val hdrFormats: Set<HdrFormat> = emptySet(),
     val audioCodec: AudioCodec? = null,
@@ -96,7 +96,7 @@ data class TorrentReleaseInfo(
 )
 ```
 
-Prefer enums for closed vocabularies such as resolution/source/codec/HDR/audio codec so sorting, filtering, labels, and future preferences do not depend on arbitrary strings.
+Prefer enums for closed vocabularies such as resolution/release source/codec/HDR/audio codec so sorting, filtering, labels, and future preferences do not depend on arbitrary strings.
 
 `TorrentSearchResult` becomes conceptually:
 
@@ -107,7 +107,7 @@ data class TorrentSearchResult(
     val magnetUri: String,
     val sizeBytes: Long? = null,
     val seeders: Int? = null,
-    val source: String? = null,
+    val source: String? = null, // provider/indexer source
     val releaseInfo: TorrentReleaseInfo = TorrentReleaseInfo(),
 )
 ```
@@ -129,7 +129,7 @@ Recognize at least:
 
 Prefer an explicit numeric resolution over a loose alias when both are present.
 
-### Source
+### Release source
 
 Recognize common forms and normalize aliases:
 
@@ -140,7 +140,7 @@ Recognize common forms and normalize aliases:
 - `HDTV`
 - `DVDRip`
 
-Source parsing must avoid false positives from ordinary title words.
+Release-source parsing must avoid false positives from ordinary title words.
 
 ### Video codec
 
@@ -216,7 +216,7 @@ Keep the existing selectable row and strong TV focus treatment.
 Recommended hierarchy:
 
 ```text
-[4K] [REMUX] [DV] [HDR10] [HEVC] [TrueHD] [Atmos] [7.1] [ENG]
+[4K] [2024] [REMUX] [DV] [HDR10] [HEVC] [10-bit] [TrueHD] [Atmos] [7.1] [ENG]
 Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.DV.HDR10.HEVC.TrueHD.Atmos.7.1-GROUP
 68.4 GiB   154 seeds   1337x
 ```
@@ -226,20 +226,23 @@ Badges should wrap onto another line rather than force the release title or righ
 Badge order should remain stable:
 
 1. resolution
-2. source
-3. HDR formats
-4. video codec
-5. audio codec
-6. audio features
-7. channels
-8. languages
-9. year, only when useful in the layout
+2. year
+3. release source
+4. HDR formats
+5. video codec
+6. bit depth
+7. audio codec
+8. audio features
+9. channels
+10. languages
 
-Do not render placeholders such as `AUTO`, `UNKNOWN`, or `N/A` for metadata that was not parsed. Missing metadata simply means no badge.
+Every successfully parsed field in this badge list is displayed; missing metadata simply produces no badge. Do not render placeholders such as `AUTO`, `UNKNOWN`, or `N/A`.
+
+Release group remains available in `TorrentReleaseInfo` but is not a first-version badge because it is already visible in the raw release title and is less useful for choosing playback quality.
 
 The raw title remains visible because it contains information the parser may not yet understand.
 
-Size, seed count, and provider/source remain secondary text, not badges.
+Size, seed count, and provider/indexer source remain secondary text, not badges.
 
 ## Error handling
 
@@ -280,7 +283,7 @@ Verify that:
 - missing fields do not render fake placeholders
 - raw release title remains visible
 - size/seeds/provider remain visible
-- a long badge set does not remove focusability or the play/start state
+- a long badge set wraps without removing focusability or the play/start state
 
 ## Future extensions
 
