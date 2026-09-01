@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -329,10 +330,6 @@ fun HomeScreen(
 								entries = resumeWatching,
 								listState = homeState.resumeRowState,
 								focusRequesters = resumeRequesters,
-								onMoveUp = { searchRequester.requestFocus() },
-								onMoveDown = trendingDestination?.let { destination ->
-									{ destination.requestFocus() }
-								},
 								onFocused = { entry ->
 									homeState.lastResumeMovieId = entry.movie.tmdbId
 									homeState.focusedTarget = HomeFocusTarget.Resume(entry.movie.tmdbId)
@@ -350,10 +347,6 @@ fun HomeScreen(
 							movies = state.trending,
 							listState = homeState.trendingRowState,
 							focusRequesters = trendingRequesters,
-							onMoveUp = {
-								(resumeDestination ?: searchRequester).requestFocus()
-							},
-							onMoveDown = null,
 							onFocused = { movie ->
 								homeState.lastTrendingMovieId = movie.tmdbId
 								homeState.focusedTarget = HomeFocusTarget.Trending(movie.tmdbId)
@@ -442,8 +435,6 @@ private fun HomeTrendingRow(
 	movies: List<Movie>,
 	listState: LazyListState,
 	focusRequesters: Map<Int, FocusRequester>,
-	onMoveUp: () -> Unit,
-	onMoveDown: (() -> Unit)?,
 	onFocused: (Movie) -> Unit,
 	isLoading: Boolean,
 	errorMessage: String?,
@@ -462,10 +453,7 @@ private fun HomeTrendingRow(
 			movies.isNotEmpty() -> {
 				LazyRow(
 					state = listState,
-					modifier = Modifier.verticalFocusNavigation(
-						onMoveUp = onMoveUp,
-						onMoveDown = onMoveDown,
-					),
+					modifier = Modifier.focusRestorer(),
 					horizontalArrangement = Arrangement.spacedBy(18.dp),
 					contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
 				) {
@@ -523,8 +511,6 @@ private fun HomeResumeWatchingRow(
 	entries: List<WatchProgressEntry>,
 	listState: LazyListState,
 	focusRequesters: Map<Int, FocusRequester>,
-	onMoveUp: () -> Unit,
-	onMoveDown: (() -> Unit)?,
 	onFocused: (WatchProgressEntry) -> Unit,
 	onResume: (WatchProgressEntry) -> Unit,
 	onCancelStarting: () -> Unit,
@@ -540,10 +526,7 @@ private fun HomeResumeWatchingRow(
 		)
 		LazyRow(
 			state = listState,
-			modifier = Modifier.verticalFocusNavigation(
-				onMoveUp = onMoveUp,
-				onMoveDown = onMoveDown,
-			),
+			modifier = Modifier.focusRestorer(),
 			horizontalArrangement = Arrangement.spacedBy(18.dp),
 			contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
 		) {
@@ -666,37 +649,6 @@ private fun HomeResumeWatchingCard(
 					strokeWidth = 3.dp,
 				)
 			}
-		}
-	}
-}
-
-private fun Modifier.verticalFocusNavigation(
-	onMoveUp: (() -> Unit)?,
-	onMoveDown: (() -> Unit)?,
-): Modifier = onPreviewKeyEvent { event ->
-	if (event.type != KeyEventType.KeyDown) {
-		false
-	} else {
-		when (event.key) {
-			Key.DirectionUp -> {
-				if (onMoveUp != null) {
-					onMoveUp()
-					true
-				} else {
-					false
-				}
-			}
-
-			Key.DirectionDown -> {
-				if (onMoveDown != null) {
-					onMoveDown()
-					true
-				} else {
-					false
-				}
-			}
-
-			else -> false
 		}
 	}
 }
