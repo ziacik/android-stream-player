@@ -14,6 +14,7 @@ class TorrentSearchController(
 	private val scope: CoroutineScope,
 	private val catalog: MovieCatalog,
 	private val provider: TorrentSearchProvider,
+	private val releaseParser: TorrentReleaseParser = DefaultTorrentReleaseParser,
 ) {
 	private val mutableState = MutableStateFlow(TorrentSearchUiState())
 	val state: StateFlow<TorrentSearchUiState> = mutableState.asStateFlow()
@@ -49,7 +50,7 @@ class TorrentSearchController(
 			)
 
 			try {
-				val results = provider.search(request)
+				val results = provider.search(request).map(::enrichReleaseInfo)
 				if (generation != currentGeneration) return@launch
 
 				mutableState.value = TorrentSearchUiState(
@@ -78,5 +79,14 @@ class TorrentSearchController(
 		searchJob = null
 		generation += 1
 		mutableState.value = TorrentSearchUiState()
+	}
+
+	private fun enrichReleaseInfo(result: TorrentSearchResult): TorrentSearchResult {
+		val info = runCatching { releaseParser.parse(result.title) }
+			.getOrElse { return result }
+		return result.copy(
+			quality = info.resolution?.releaseLabel ?: result.quality,
+			releaseInfo = info,
+		)
 	}
 }
