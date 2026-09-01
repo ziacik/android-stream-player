@@ -2,10 +2,12 @@ package sk.ziacik.androidstreamplayer.ui
 
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -93,6 +95,56 @@ class MovieDetailScreenTest {
 		}
 		composeRule.onNodeWithText("Couldn’t find versions").assertIsDisplayed()
 		composeRule.onNodeWithText("Retry").assertIsDisplayed()
+	}
+
+	@Test
+	fun parsedReleaseMetadataRendersAsBadgesAndKeepsRawTorrentDetails() {
+		val title = "Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.DV.HDR10.HEVC.TrueHD.Atmos.7.1.ENG-GROUP"
+		val hit = TorrentSearchResult(
+			id = "badges",
+			title = title,
+			magnetUri = "magnet:?xt=urn:btih:badges",
+			sizeBytes = 8_000_000_000,
+			seeders = 42,
+			source = "Knaben",
+		)
+		setDetail(provider = TorrentSearchProvider { listOf(hit) })
+
+		composeRule.waitUntil(timeoutMillis = 5_000) {
+			composeRule.onAllNodes(hasTestTag("torrent-badges")).fetchSemanticsNodes().isNotEmpty()
+		}
+		listOf(
+			"4K",
+			"REMUX",
+			"DV",
+			"HDR10",
+			"HEVC",
+			"TrueHD",
+			"Atmos",
+			"7.1",
+			"ENG",
+			"2024",
+		).forEach { label ->
+			composeRule.onNodeWithText(label).assertIsDisplayed()
+		}
+		composeRule.onNodeWithText(title).assertIsDisplayed()
+		composeRule.onNodeWithText("42 seeds").assertIsDisplayed()
+		composeRule.onNodeWithText("Knaben").assertIsDisplayed()
+	}
+
+	@Test
+	fun unknownReleaseMetadataDoesNotRenderAutoPlaceholder() {
+		val hit = TorrentSearchResult(
+			id = "unknown",
+			title = "Some.Movie.Release",
+			magnetUri = "magnet:?xt=urn:btih:unknown",
+		)
+		setDetail(provider = TorrentSearchProvider { listOf(hit) })
+
+		composeRule.waitUntil(timeoutMillis = 5_000) {
+			composeRule.onAllNodes(hasTestTag("torrent-unknown")).fetchSemanticsNodes().isNotEmpty()
+		}
+		composeRule.onAllNodesWithText("AUTO").assertCountEquals(0)
 	}
 
 	@Test

@@ -4,6 +4,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.util.Locale
+import sk.ziacik.androidstreamplayer.search.TorrentReleaseInfo
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 import sk.ziacik.androidstreamplayer.search.TorrentSearchUiState
 
@@ -208,24 +211,11 @@ private fun TorrentResultRow(
 				.padding(horizontal = 18.dp, vertical = 15.dp),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
-			Surface(
-				shape = RoundedCornerShape(7.dp),
-				color = MaterialTheme.colorScheme.secondaryContainer,
-			) {
-				Text(
-					text = result.quality ?: "AUTO",
-					modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-					style = MaterialTheme.typography.labelLarge,
-					fontWeight = FontWeight.Bold,
-				)
-			}
-
-			Spacer(Modifier.width(14.dp))
-
 			Column(
 				modifier = Modifier.weight(1f),
-				verticalArrangement = Arrangement.spacedBy(4.dp),
+				verticalArrangement = Arrangement.spacedBy(6.dp),
 			) {
+				ReleaseBadges(result.releaseInfo)
 				Text(
 					text = result.title,
 					style = MaterialTheme.typography.titleMedium,
@@ -280,6 +270,46 @@ private fun TorrentResultRow(
 			}
 		}
 	}
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReleaseBadges(info: TorrentReleaseInfo) {
+	val labels = torrentReleaseBadgeLabels(info)
+	if (labels.isEmpty()) return
+
+	FlowRow(
+		modifier = Modifier.fillMaxWidth(),
+		horizontalArrangement = Arrangement.spacedBy(6.dp),
+		verticalArrangement = Arrangement.spacedBy(6.dp),
+	) {
+		labels.forEach { label ->
+			Surface(
+				shape = RoundedCornerShape(6.dp),
+				color = MaterialTheme.colorScheme.secondaryContainer,
+			) {
+				Text(
+					text = label,
+					modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+					style = MaterialTheme.typography.labelMedium,
+					fontWeight = FontWeight.Bold,
+					color = MaterialTheme.colorScheme.onSecondaryContainer,
+				)
+			}
+		}
+	}
+}
+
+internal fun torrentReleaseBadgeLabels(info: TorrentReleaseInfo): List<String> = buildList {
+	info.resolution?.let { add(it.label) }
+	info.releaseSource?.let { add(it.label) }
+	info.hdrFormats.sortedBy { it.displayOrder }.forEach { add(it.label) }
+	info.videoCodec?.let { add(it.label) }
+	info.audioCodec?.let { add(it.label) }
+	info.audioFeatures.sortedBy { it.displayOrder }.forEach { add(it.label) }
+	info.audioChannels?.let(::add)
+	addAll(info.languages)
+	info.year?.let { add(it.toString()) }
 }
 
 private fun formatSize(bytes: Long): String {

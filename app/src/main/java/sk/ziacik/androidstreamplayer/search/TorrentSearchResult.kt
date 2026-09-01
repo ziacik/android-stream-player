@@ -8,4 +8,5 @@ data class TorrentSearchResult(
     val sizeBytes: Long? = null,
     val seeders: Int? = null,
     val source: String? = null,
+    val releaseInfo: TorrentReleaseInfo = TorrentReleaseInfo(),
 )
