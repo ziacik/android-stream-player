@@ -468,8 +468,9 @@ private fun HomeHeader(
 					down = downFocusRequester ?: FocusRequester.Default
 				},
 			contentPadding = PaddingValues(0.dp),
-	) {
-		SearchGlyph()
+		) {
+			SearchGlyph()
+		}
 	}
 }
 
