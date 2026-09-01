@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 
 sealed interface HomeFocusTarget {
+	data object Home : HomeFocusTarget
 	data object Search : HomeFocusTarget
 	data class Resume(val movieId: Int) : HomeFocusTarget
 	data class Trending(val movieId: Int) : HomeFocusTarget
