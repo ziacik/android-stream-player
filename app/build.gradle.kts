@@ -7,6 +7,13 @@ plugins {
 }
 
 val torrServerAbi = providers.gradleProperty("torrserverAbi").orElse("arm64-v8a")
+val torrServerAbis = providers.gradleProperty("torrserverAbis")
+    .map { value ->
+        value.split(",")
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+    }
+    .orElse(torrServerAbi.map { listOf(it) })
 val tmdbApiKey = providers.gradleProperty("tmdbApiKey")
     .orElse(providers.environmentVariable("TMDB_API_KEY"))
     .orElse("")
@@ -24,29 +31,38 @@ val generatedTorrServerJniLibsDir = layout.buildDirectory
     .dir("generated/torrserver/jniLibs")
     .get()
     .asFile
+val releaseKeystoreFile = providers.environmentVariable("KINO_KEYSTORE_FILE")
+val releaseKeystorePassword = providers.environmentVariable("KINO_KEYSTORE_PASSWORD")
+val releaseKeyAlias = providers.environmentVariable("KINO_KEY_ALIAS")
+val releaseKeyPassword = providers.environmentVariable("KINO_KEY_PASSWORD")
+val releaseVersionName = providers.environmentVariable("KINO_VERSION_NAME").orElse("0.1.0")
+val releaseVersionCode = providers.environmentVariable("KINO_VERSION_CODE").orElse("1")
+val releaseSigningConfigured = listOf(
+    releaseKeystoreFile.orNull,
+    releaseKeystorePassword.orNull,
+    releaseKeyAlias.orNull,
+    releaseKeyPassword.orNull,
+).all { !it.isNullOrBlank() }
 
 val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
     notCompatibleWithConfigurationCache("Downloads and verifies the pinned TorrServer release asset")
-    inputs.property("torrserverAbi", torrServerAbi)
+    inputs.property("torrserverAbis", torrServerAbis)
     outputs.dir(generatedTorrServerJniLibsDir)
 
     doLast {
-        val abi = torrServerAbi.get()
-        val asset = torrServerAssets[abi]
-            ?: throw GradleException("Unsupported TorrServer ABI: $abi")
-        val assetName = asset.first
-        val expectedSha256 = asset.second
+        val abis = torrServerAbis.get().distinct()
+        val unsupportedAbis = abis.filterNot(torrServerAssets::containsKey)
+        if (unsupportedAbis.isNotEmpty()) {
+            throw GradleException("Unsupported TorrServer ABI(s): ${unsupportedAbis.joinToString()}")
+        }
 
         generatedTorrServerJniLibsDir.listFiles()
-            ?.filter { it.name != abi }
+            ?.filter { it.name !in abis }
             ?.forEach { staleAbiDir ->
                 if (!staleAbiDir.deleteRecursively()) {
                     throw GradleException("Could not remove stale TorrServer ABI directory: $staleAbiDir")
                 }
             }
-
-        val outputDir = generatedTorrServerJniLibsDir.resolve(abi)
-        val outputFile = outputDir.resolve("libtorrserver.so")
 
         fun sha256(file: java.io.File): String {
             val digest = MessageDigest.getInstance("SHA-256")
@@ -61,42 +77,48 @@ val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
             return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
         }
 
-        if (outputFile.isFile && sha256(outputFile) == expectedSha256) {
-            logger.lifecycle("Using cached TorrServer $abi binary")
-            return@doLast
-        }
+        abis.forEach { abi ->
+            val (assetName, expectedSha256) = torrServerAssets.getValue(abi)
+            val outputDir = generatedTorrServerJniLibsDir.resolve(abi)
+            val outputFile = outputDir.resolve("libtorrserver.so")
 
-        outputDir.mkdirs()
-        val temporaryFile = outputDir.resolve("libtorrserver.so.tmp")
-        temporaryFile.delete()
-        outputFile.delete()
-
-        val url = URI(
-            "https://github.com/YouROK/TorrServer/releases/download/MatriX.143/$assetName",
-        ).toURL()
-        logger.lifecycle("Downloading TorrServer $assetName")
-        url.openConnection().apply {
-            connectTimeout = 30_000
-            readTimeout = 120_000
-        }.getInputStream().buffered().use { input ->
-            temporaryFile.outputStream().buffered().use { output ->
-                input.copyTo(output)
+            if (outputFile.isFile && sha256(outputFile) == expectedSha256) {
+                logger.lifecycle("Using cached TorrServer $abi binary")
+                return@forEach
             }
-        }
 
-        val actualSha256 = sha256(temporaryFile)
-        if (actualSha256 != expectedSha256) {
+            outputDir.mkdirs()
+            val temporaryFile = outputDir.resolve("libtorrserver.so.tmp")
             temporaryFile.delete()
-            throw GradleException(
-                "TorrServer SHA-256 mismatch for $assetName: expected $expectedSha256, got $actualSha256",
-            )
-        }
+            outputFile.delete()
 
-        if (!temporaryFile.renameTo(outputFile)) {
-            temporaryFile.copyTo(outputFile, overwrite = true)
-            temporaryFile.delete()
+            val url = URI(
+                "https://github.com/YouROK/TorrServer/releases/download/MatriX.143/$assetName",
+            ).toURL()
+            logger.lifecycle("Downloading TorrServer $assetName")
+            url.openConnection().apply {
+                connectTimeout = 30_000
+                readTimeout = 120_000
+            }.getInputStream().buffered().use { input ->
+                temporaryFile.outputStream().buffered().use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            val actualSha256 = sha256(temporaryFile)
+            if (actualSha256 != expectedSha256) {
+                temporaryFile.delete()
+                throw GradleException(
+                    "TorrServer SHA-256 mismatch for $assetName: expected $expectedSha256, got $actualSha256",
+                )
+            }
+
+            if (!temporaryFile.renameTo(outputFile)) {
+                temporaryFile.copyTo(outputFile, overwrite = true)
+                temporaryFile.delete()
+            }
+            logger.lifecycle("Prepared TorrServer $abi at ${outputFile.absolutePath}")
         }
-        logger.lifecycle("Prepared TorrServer $abi at ${outputFile.absolutePath}")
     }
 }
 
@@ -104,14 +126,33 @@ android {
     namespace = "sk.ziacik.androidstreamplayer"
     compileSdk = 36
 
+    signingConfigs {
+        create("release") {
+            if (releaseSigningConfigured) {
+                storeFile = file(requireNotNull(releaseKeystoreFile.orNull))
+                storePassword = releaseKeystorePassword.orNull
+                keyAlias = releaseKeyAlias.orNull
+                keyPassword = releaseKeyPassword.orNull
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "sk.ziacik.androidstreamplayer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = releaseVersionCode.get().toInt()
+        versionName = releaseVersionName.get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey.get()}\"")
+    }
+
+    buildTypes {
+        getByName("release") {
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 
     sourceSets {
