@@ -22,7 +22,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -68,6 +68,33 @@ jobs:
           ./gradlew :app:prepareTorrServerBinary -PtorrserverAbi=armeabi-v7a --stacktrace
           test -f app/build/generated/torrserver/jniLibs/armeabi-v7a/libtorrserver.so
           test ! -e app/build/generated/torrserver/jniLibs/arm64-v8a/libtorrserver.so
+
+      - name: Verify signed universal release APK
+        env:
+          KINO_KEYSTORE_FILE: ${{ runner.temp }}/kino-ci-release.jks
+          KINO_KEYSTORE_PASSWORD: android
+          KINO_KEY_ALIAS: kino-ci
+          KINO_KEY_PASSWORD: android
+          KINO_VERSION_NAME: 0.1.0-ci
+          KINO_VERSION_CODE: '1'
+        run: |
+          keytool -genkeypair \
+            -keystore "$KINO_KEYSTORE_FILE" \
+            -storepass "$KINO_KEYSTORE_PASSWORD" \
+            -alias "$KINO_KEY_ALIAS" \
+            -keypass "$KINO_KEY_PASSWORD" \
+            -dname 'CN=Kino CI,O=Kino,C=SK' \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 1
+          ./gradlew :app:assembleRelease -PtorrserverAbis=arm64-v8a,armeabi-v7a --stacktrace
+          apk='app/build/outputs/apk/release/app-release.apk'
+          test -f "$apk"
+          unzip -l "$apk" | grep -q 'lib/arm64-v8a/libtorrserver.so'
+          unzip -l "$apk" | grep -q 'lib/armeabi-v7a/libtorrserver.so'
+          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          test -x "$apksigner"
+          "$apksigner" verify --verbose "$apk"
 
       - name: Upload verification reports
         if: failure()
