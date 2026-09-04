@@ -1,13 +1,17 @@
 package sk.ziacik.androidstreamplayer.playback
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
+import sk.ziacik.androidstreamplayer.subtitle.SubtitleTrack
 import sk.ziacik.androidstreamplayer.torrent.TorrentSource
 import sk.ziacik.androidstreamplayer.torrent.TorrentStreamer
 
@@ -36,6 +40,84 @@ class PlaybackControllerTest {
 
 		assertEquals(selected, prepared)
 		assertEquals(source, played)
+		assertEquals("Playing", controller.state.value.status)
+	}
+
+	@Test
+	fun `movie playback resolves subtitle and passes it to player`() = runTest {
+		val selectedMovie = movie()
+		val selectedResult = result("matrix")
+		val subtitle = SubtitleTrack(
+			path = "/tmp/matrix-sk.srt",
+			language = "sk",
+			mimeType = "application/x-subrip",
+			label = "Slovak",
+		)
+		var lookupMovie: Movie? = null
+		var lookupResult: TorrentSearchResult? = null
+		var playedSubtitle: SubtitleTrack? = null
+		val controller = PlaybackController(
+			scope = this,
+			streamer = TorrentStreamer { TorrentSource("torrent://stream/matrix.mkv") },
+			subtitleLookup = { foundMovie, foundResult ->
+				lookupMovie = foundMovie
+				lookupResult = foundResult
+				subtitle
+			},
+			onStreamReady = { _, foundSubtitle -> playedSubtitle = foundSubtitle },
+		)
+
+		controller.play(selectedMovie, selectedResult)
+		advanceUntilIdle()
+
+		assertEquals(selectedMovie, lookupMovie)
+		assertEquals(selectedResult, lookupResult)
+		assertEquals(subtitle, playedSubtitle)
+		assertEquals("Playing", controller.state.value.status)
+	}
+
+	@Test
+	fun `subtitle lookup failure does not block movie playback`() = runTest {
+		var lookupCalled = false
+		var playedSubtitle: SubtitleTrack? = SubtitleTrack("unexpected", "sk", "text/plain", "Unexpected")
+		val controller = PlaybackController(
+			scope = this,
+			streamer = TorrentStreamer { TorrentSource("torrent://stream/matrix.mkv") },
+			subtitleLookup = { _, _ ->
+				lookupCalled = true
+				throw IllegalStateException("provider down")
+			},
+			onStreamReady = { _, foundSubtitle -> playedSubtitle = foundSubtitle },
+		)
+
+		controller.play(movie(), result("matrix"))
+		advanceUntilIdle()
+
+		assertTrue(lookupCalled)
+		assertNull(playedSubtitle)
+		assertEquals("Playing", controller.state.value.status)
+	}
+
+	@Test
+	fun `subtitle lookup timeout does not block movie playback`() = runTest {
+		var lookupStarted = false
+		var playedSubtitle: SubtitleTrack? = SubtitleTrack("unexpected", "sk", "text/plain", "Unexpected")
+		val controller = PlaybackController(
+			scope = this,
+			streamer = TorrentStreamer { TorrentSource("torrent://stream/matrix.mkv") },
+			subtitleLookup = { _, _ ->
+				lookupStarted = true
+				awaitCancellation()
+			},
+			subtitleTimeoutMs = 500L,
+			onStreamReady = { _, foundSubtitle -> playedSubtitle = foundSubtitle },
+		)
+
+		controller.play(movie(), result("matrix"))
+		advanceUntilIdle()
+
+		assertTrue(lookupStarted)
+		assertNull(playedSubtitle)
 		assertEquals("Playing", controller.state.value.status)
 	}
 
@@ -137,6 +219,18 @@ class PlaybackControllerTest {
 		assertEquals("Magnet", prepared?.source)
 		assertEquals(magnet, prepared?.magnetUri)
 	}
+
+	private fun movie() = Movie(
+		tmdbId = 603,
+		imdbId = "tt0133093",
+		title = "The Matrix",
+		originalTitle = "The Matrix",
+		releaseYear = 1999,
+		overview = null,
+		voteAverage = null,
+		posterPath = null,
+		backdropPath = null,
+	)
 
 	private fun result(id: String) = TorrentSearchResult(
 		id = id,
