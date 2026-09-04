@@ -9,14 +9,27 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
+import sk.ziacik.androidstreamplayer.subtitle.SubtitleTrack
 import sk.ziacik.androidstreamplayer.torrent.TorrentSource
 import sk.ziacik.androidstreamplayer.torrent.TorrentStreamer
 
 class PlaybackController(
 	private val scope: CoroutineScope,
 	private val streamer: TorrentStreamer?,
-	private val onStreamReady: (TorrentSource) -> Unit = {},
+	private val subtitleLookup: (suspend (Movie, TorrentSearchResult) -> SubtitleTrack?)? = null,
+	private val subtitleTimeoutMs: Long = DEFAULT_SUBTITLE_TIMEOUT_MS,
+	private val onStreamReady: (TorrentSource, SubtitleTrack?) -> Unit = { _, _ -> },
 ) {
+	constructor(
+		scope: CoroutineScope,
+		streamer: TorrentStreamer?,
+		onStreamReady: (TorrentSource) -> Unit,
+	) : this(
+		scope = scope,
+		streamer = streamer,
+		onStreamReady = { source, _ -> onStreamReady(source) },
+	)
+
 	private val mutableState = MutableStateFlow(PlaybackUiState())
 	val state: StateFlow<PlaybackUiState> = mutableState.asStateFlow()
 
@@ -24,10 +37,14 @@ class PlaybackController(
 	private var generation = 0L
 
 	fun play(movie: Movie, result: TorrentSearchResult) {
-		play(result)
+		playInternal(movie, result)
 	}
 
 	fun play(result: TorrentSearchResult) {
+		playInternal(null, result)
+	}
+
+	private fun playInternal(movie: Movie?, result: TorrentSearchResult) {
 		playbackJob?.cancel()
 		generation += 1
 		val currentGeneration = generation
@@ -56,7 +73,7 @@ class PlaybackController(
 			if (generation != currentGeneration) return@launch
 
 			try {
-				onStreamReady(source)
+				onStreamReady(source, null)
 			} catch (_: Throwable) {
 				publishStatus(result, "Playback failed", currentGeneration)
 				return@launch
@@ -95,5 +112,9 @@ class PlaybackController(
 			selectedResult = result,
 			status = status,
 		)
+	}
+
+	private companion object {
+		const val DEFAULT_SUBTITLE_TIMEOUT_MS = 2_500L
 	}
 }
