@@ -7,7 +7,10 @@ import java.security.MessageDigest
 import java.util.Locale
 import java.util.zip.ZipInputStream
 import javax.xml.parsers.DocumentBuilderFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.w3c.dom.Element
 import sk.ziacik.androidstreamplayer.catalog.Movie
@@ -15,7 +18,7 @@ import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 
 class PodnapisiSubtitleProvider internal constructor(
 	private val cacheDir: File,
-	private val transport: SubtitleHttpTransport,
+	private val transport: SubtitleHttpTransport = OkHttpSubtitleTransport(),
 ) {
 	suspend fun find(movie: Movie, result: TorrentSearchResult): SubtitleTrack? {
 		val cacheKey = cacheKey(movie, result)
@@ -253,4 +256,18 @@ internal data class SubtitleHttpResponse(
 
 internal fun interface SubtitleHttpTransport {
 	suspend fun execute(request: Request): SubtitleHttpResponse
+}
+
+internal class OkHttpSubtitleTransport(
+	private val client: OkHttpClient = OkHttpClient(),
+) : SubtitleHttpTransport {
+	override suspend fun execute(request: Request): SubtitleHttpResponse =
+		withContext(Dispatchers.IO) {
+			client.newCall(request).execute().use { response ->
+				SubtitleHttpResponse(
+					code = response.code,
+					body = response.body.bytes(),
+				)
+			}
+		}
 }
