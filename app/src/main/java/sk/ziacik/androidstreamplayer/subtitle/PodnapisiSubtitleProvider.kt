@@ -1,0 +1,3 @@
+package sk.ziacik.androidstreamplayer.subtitle
+
+class PodnapisiSubtitleProvider
