@@ -121,12 +121,12 @@ class PodnapisiSubtitleProviderTest {
 		</subtitle>
 	""".trimIndent()
 
-	private fun searchXml(vararg candidates: String) = """
-		<?xml version="1.0" encoding="UTF-8"?>
-		<results>
-			${candidates.joinToString("\n")}
-		</results>
-	""".trimIndent()
+	private fun searchXml(vararg candidates: String) = buildString {
+		appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+		appendLine("<results>")
+		candidates.forEach(::appendLine)
+		append("</results>")
+	}
 
 	private fun zipSubtitle(name: String, text: String): ByteArray {
 		val output = ByteArrayOutputStream()
