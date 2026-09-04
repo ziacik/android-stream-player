@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 import sk.ziacik.androidstreamplayer.torrent.TorrentSource
 import sk.ziacik.androidstreamplayer.torrent.TorrentStreamer
@@ -21,6 +22,10 @@ class PlaybackController(
 
 	private var playbackJob: Job? = null
 	private var generation = 0L
+
+	fun play(movie: Movie, result: TorrentSearchResult) {
+		play(result)
+	}
 
 	fun play(result: TorrentSearchResult) {
 		playbackJob?.cancel()
