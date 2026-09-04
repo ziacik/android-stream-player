@@ -19,6 +19,7 @@ import sk.ziacik.androidstreamplayer.playback.PlaybackController
 import sk.ziacik.androidstreamplayer.player.Media3PlayerPort
 import sk.ziacik.androidstreamplayer.search.KnabenTorrentSearchProvider
 import sk.ziacik.androidstreamplayer.search.TorrentSearchController
+import sk.ziacik.androidstreamplayer.subtitle.PodnapisiSubtitleProvider
 import sk.ziacik.androidstreamplayer.torrent.LocalTorrServerRuntime
 import sk.ziacik.androidstreamplayer.torrent.TorrServerClient
 import sk.ziacik.androidstreamplayer.torrent.TorrServerProcess
@@ -71,6 +72,9 @@ class MainActivity : ComponentActivity() {
 		)
 		val torrentStreamer = TorrServerTorrentStreamer(torrentRuntime)
 		val movieCatalog = TmdbMovieCatalog(BuildConfig.TMDB_API_KEY)
+		val subtitleProvider = PodnapisiSubtitleProvider(
+			cacheDir = File(cacheDir, SUBTITLE_CACHE_DIR),
+		)
 
 		movieBrowseController = MovieBrowseController(
 			scope = appScope,
@@ -88,8 +92,9 @@ class MainActivity : ComponentActivity() {
 		playbackController = PlaybackController(
 			scope = appScope,
 			streamer = torrentStreamer,
-			onStreamReady = { source ->
-				playerPort.prepare(source)
+			subtitleLookup = subtitleProvider::find,
+			onStreamReady = { source, subtitle ->
+				playerPort.prepare(source, subtitle)
 				playerPort.play()
 			},
 		)
@@ -176,5 +181,6 @@ class MainActivity : ComponentActivity() {
 		const val EXTRA_MAGNET = "magnet"
 		const val TORRSERVER_BINARY = "libtorrserver.so"
 		const val TORRSERVER_DATA_DIR = "torrserver"
+		const val SUBTITLE_CACHE_DIR = "subtitles"
 	}
 }
