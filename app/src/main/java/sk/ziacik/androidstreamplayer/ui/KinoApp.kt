@@ -66,7 +66,7 @@ fun KinoApp(
 				onPlay = { result ->
 					playbackMovie = movie
 					resumePositionMs = null
-					playbackController.play(result)
+					playbackController.play(movie, result)
 				},
 				onBack = {
 					playbackController.exit()
@@ -86,7 +86,7 @@ fun KinoApp(
 				onResumeWatching = { entry ->
 					playbackMovie = entry.movie
 					resumePositionMs = entry.positionMs
-					playbackController.play(entry.result)
+					playbackController.play(entry.movie, entry.result)
 				},
 				onCancelResumeWatching = {
 					playbackController.exit()
