@@ -3,10 +3,12 @@ package sk.ziacik.androidstreamplayer.playback
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 import sk.ziacik.androidstreamplayer.subtitle.SubtitleTrack
@@ -55,8 +57,25 @@ class PlaybackController(
 		)
 
 		playbackJob = scope.launch {
+			val subtitleDeferred = if (movie != null && subtitleLookup != null) {
+				async {
+					try {
+						withTimeoutOrNull(subtitleTimeoutMs) {
+							subtitleLookup.invoke(movie, result)
+						}
+					} catch (error: CancellationException) {
+						throw error
+					} catch (_: Throwable) {
+						null
+					}
+				}
+			} else {
+				null
+			}
+
 			val activeStreamer = streamer
 			if (activeStreamer == null) {
+				subtitleDeferred?.cancel()
 				publishStatus(result, "Streaming unavailable", currentGeneration)
 				return@launch
 			}
@@ -66,14 +85,16 @@ class PlaybackController(
 			} catch (error: CancellationException) {
 				throw error
 			} catch (_: Throwable) {
+				subtitleDeferred?.cancel()
 				publishStatus(result, "Stream failed", currentGeneration)
 				return@launch
 			}
 
+			val subtitle = subtitleDeferred?.await()
 			if (generation != currentGeneration) return@launch
 
 			try {
-				onStreamReady(source, null)
+				onStreamReady(source, subtitle)
 			} catch (_: Throwable) {
 				publishStatus(result, "Playback failed", currentGeneration)
 				return@launch
