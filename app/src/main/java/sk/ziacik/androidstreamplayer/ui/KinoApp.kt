@@ -11,8 +11,10 @@ import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.catalog.MovieBrowseController
 import sk.ziacik.androidstreamplayer.catalog.MovieSearchController
 import sk.ziacik.androidstreamplayer.playback.PlaybackController
+import sk.ziacik.androidstreamplayer.playback.SubtitleUiState
 import sk.ziacik.androidstreamplayer.search.TorrentSearchController
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
+import sk.ziacik.androidstreamplayer.subtitle.SubtitleOption
 import sk.ziacik.androidstreamplayer.watch.WatchProgressRepository
 
 @Composable
@@ -22,7 +24,14 @@ fun KinoApp(
 	torrentSearchController: TorrentSearchController,
 	playbackController: PlaybackController,
 	watchProgressRepository: WatchProgressRepository,
-	playerContent: @Composable (Movie?, TorrentSearchResult?, Long?, () -> Unit) -> Unit,
+	playerContent: @Composable (
+		Movie?,
+		TorrentSearchResult?,
+		Long?,
+		SubtitleUiState,
+		(SubtitleOption?) -> Unit,
+		() -> Unit,
+	) -> Unit,
 ) {
 	var rootScreen by remember { mutableStateOf(KinoRootScreen.Home) }
 	var selectedMovie by remember { mutableStateOf<Movie?>(null) }
@@ -50,6 +59,8 @@ fun KinoApp(
 				playbackMovie,
 				playbackState.selectedResult,
 				resumePositionMs,
+				playbackState.subtitles,
+				playbackController::selectSubtitle,
 			) {
 				playbackController.exit()
 				playbackMovie = null
