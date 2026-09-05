@@ -7,6 +7,7 @@ import java.util.zip.ZipOutputStream
 import okhttp3.Request
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -17,6 +18,32 @@ import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 class PodnapisiSubtitleProviderTest {
 	@get:Rule
 	val temporaryFolder = TemporaryFolder()
+
+	@Test
+	fun `name-only match is not auto-selected without an exact hash`() = kotlinx.coroutines.test.runTest {
+		val release = "The.Matrix.1999.1080p.BluRay.x264-GROUP"
+		val transport = QueueSubtitleTransport(
+			SubtitleHttpResponse(
+				code = 200,
+				body = searchXml(
+					candidate("sk-exact-release", release, "37", 50),
+				).encodeToByteArray(),
+			),
+			SubtitleHttpResponse(
+				code = 200,
+				body = zipSubtitle("The.Matrix.1999.sk.srt", "slovak subtitle"),
+			),
+		)
+		val provider = PodnapisiSubtitleProvider(
+			cacheDir = temporaryFolder.newFolder("no-auto-guess"),
+			transport = transport,
+		)
+
+		val subtitle = provider.find(movie(), result(release))
+
+		assertNull(subtitle)
+		assertEquals(1, transport.requests.size)
+	}
 
 	@Test
 	fun `find prefers Slovak and best matching release then caches subtitle`() = kotlinx.coroutines.test.runTest {
