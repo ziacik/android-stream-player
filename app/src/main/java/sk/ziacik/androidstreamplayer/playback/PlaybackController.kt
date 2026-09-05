@@ -1,5 +1,6 @@
 package sk.ziacik.androidstreamplayer.playback
 
+import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -70,7 +71,12 @@ class PlaybackController(
 					)
 				} catch (error: CancellationException) {
 					throw error
-				} catch (_: Throwable) {
+				} catch (error: Throwable) {
+					Log.e(
+						TAG,
+						"Subtitle search failed for movie=${movie.title} (${movie.releaseYear}), torrent=${result.title}",
+						error,
+					)
 					if (generation != currentGeneration) return@launch
 					val current = mutableState.value
 					mutableState.value = current.copy(
@@ -223,5 +229,9 @@ class PlaybackController(
 				message = message,
 			),
 		)
+	}
+
+	private companion object {
+		const val TAG = "KinoSubtitles"
 	}
 }
