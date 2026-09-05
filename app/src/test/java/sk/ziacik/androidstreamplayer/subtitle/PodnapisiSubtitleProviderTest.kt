@@ -6,7 +6,6 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import okhttp3.Request
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -29,10 +28,6 @@ class PodnapisiSubtitleProviderTest {
 					candidate("sk-exact-release", release, "37", 50),
 				).encodeToByteArray(),
 			),
-			SubtitleHttpResponse(
-				code = 200,
-				body = zipSubtitle("The.Matrix.1999.sk.srt", "slovak subtitle"),
-			),
 		)
 		val provider = PodnapisiSubtitleProvider(
 			cacheDir = temporaryFolder.newFolder("no-auto-guess"),
@@ -42,11 +37,11 @@ class PodnapisiSubtitleProviderTest {
 		val subtitle = provider.find(movie(), result(release))
 
 		assertNull(subtitle)
-		assertEquals(1, transport.requests.size)
+		assertEquals(0, transport.requests.size)
 	}
 
 	@Test
-	fun `find prefers Slovak and best matching release then caches subtitle`() = kotlinx.coroutines.test.runTest {
+	fun `search returns all candidates ordered by language then release match`() = kotlinx.coroutines.test.runTest {
 		val release = "The.Matrix.1999.1080p.BluRay.x264-GROUP"
 		val transport = QueueSubtitleTransport(
 			SubtitleHttpResponse(
@@ -58,67 +53,56 @@ class PodnapisiSubtitleProviderTest {
 					candidate("sk-best", release, "37", 20),
 				).encodeToByteArray(),
 			),
-			SubtitleHttpResponse(
-				code = 200,
-				body = zipSubtitle("The.Matrix.1999.sk.srt", "slovak subtitle"),
-			),
 		)
 		val provider = PodnapisiSubtitleProvider(
-			cacheDir = temporaryFolder.newFolder("subtitles"),
+			cacheDir = temporaryFolder.newFolder("search"),
 			transport = transport,
 		)
-		val movie = movie()
-		val result = result(release)
 
-		val first = provider.find(movie, result)
+		val options = provider.search(movie(), result(release))
 
-		assertNotNull(first)
-		assertEquals("sk", first?.language)
-		assertEquals("Slovak", first?.label)
-		assertEquals("application/x-subrip", first?.mimeType)
-		assertEquals("slovak subtitle", File(first!!.path).readText())
-		assertEquals(2, transport.requests.size)
+		assertEquals(listOf("sk-best", "sk-cam", "cs-exact", "en-exact"), options.map { it.id })
+		assertEquals(listOf("Slovak", "Slovak", "Czech", "English"), options.map { it.label })
+		assertEquals(1, transport.requests.size)
 		assertEquals("The Matrix", transport.requests[0].url.queryParameter("sK"))
 		assertEquals("1999", transport.requests[0].url.queryParameter("sY"))
 		assertEquals("37,7,2", transport.requests[0].url.queryParameter("sL"))
 		assertEquals("1", transport.requests[0].url.queryParameter("sXML"))
-		assertTrue(transport.requests[1].url.encodedPath.endsWith("/subtitles/sk-best/download"))
-
-		val second = provider.find(movie, result)
-
-		assertEquals(first, second)
-		assertEquals(2, transport.requests.size)
 	}
 
 	@Test
-	fun `find falls back to Czech when Slovak is unavailable`() = kotlinx.coroutines.test.runTest {
+	fun `download fetches selected candidate and caches it`() = kotlinx.coroutines.test.runTest {
 		val release = "Arrival.2016.1080p.WEB-DL.DD5.1.H264-GROUP"
 		val transport = QueueSubtitleTransport(
-			SubtitleHttpResponse(
-				code = 200,
-				body = searchXml(
-					candidate("en", release, "2", 1_000),
-					candidate("cs", release, "7", 10),
-				).encodeToByteArray(),
-			),
 			SubtitleHttpResponse(
 				code = 200,
 				body = zipSubtitle("Arrival.cs.srt", "czech subtitle"),
 			),
 		)
 		val provider = PodnapisiSubtitleProvider(
-			cacheDir = temporaryFolder.newFolder("czech"),
+			cacheDir = temporaryFolder.newFolder("download"),
 			transport = transport,
 		)
-
-		val subtitle = provider.find(
-			movie = movie(title = "Arrival", originalTitle = "Arrival", year = 2016, tmdbId = 329865),
-			result = result(release),
+		val movie = movie(title = "Arrival", originalTitle = "Arrival", year = 2016, tmdbId = 329865)
+		val result = result(release)
+		val option = SubtitleOption(
+			id = "cs-option",
+			language = "cs",
+			label = "Czech",
+			release = release,
+			downloads = 10,
 		)
 
-		assertEquals("cs", subtitle?.language)
-		assertEquals("Czech", subtitle?.label)
-		assertTrue(transport.requests[1].url.encodedPath.endsWith("/subtitles/cs/download"))
+		val first = provider.download(movie, result, option)
+		val second = provider.download(movie, result, option)
+
+		assertEquals("cs", first?.language)
+		assertEquals("Czech", first?.label)
+		assertEquals("application/x-subrip", first?.mimeType)
+		assertEquals("czech subtitle", File(first!!.path).readText())
+		assertEquals(first, second)
+		assertEquals(1, transport.requests.size)
+		assertTrue(transport.requests[0].url.encodedPath.endsWith("/subtitles/cs-option/download"))
 	}
 
 	private class QueueSubtitleTransport(
