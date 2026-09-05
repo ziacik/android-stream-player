@@ -2,6 +2,7 @@ package sk.ziacik.androidstreamplayer.ui
 
 internal enum class KinoPlayerFocus {
     PROGRESS,
+    SUBTITLES,
     SEEK_BACK,
     PLAY_PAUSE,
     SEEK_FORWARD,
@@ -44,10 +45,16 @@ internal fun kinoHorizontalAction(
     }
 
     val nextFocus = when (focus) {
+        KinoPlayerFocus.SUBTITLES -> if (direction > 0) {
+            KinoPlayerFocus.SEEK_BACK
+        } else {
+            KinoPlayerFocus.SUBTITLES
+        }
+
         KinoPlayerFocus.SEEK_BACK -> if (direction > 0) {
             KinoPlayerFocus.PLAY_PAUSE
         } else {
-            KinoPlayerFocus.SEEK_BACK
+            KinoPlayerFocus.SUBTITLES
         }
 
         KinoPlayerFocus.PLAY_PAUSE -> if (direction > 0) {
