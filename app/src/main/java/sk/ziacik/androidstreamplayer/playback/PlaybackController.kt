@@ -3,14 +3,13 @@ package sk.ziacik.androidstreamplayer.playback
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
+import sk.ziacik.androidstreamplayer.subtitle.SubtitleOption
 import sk.ziacik.androidstreamplayer.subtitle.SubtitleTrack
 import sk.ziacik.androidstreamplayer.torrent.TorrentSource
 import sk.ziacik.androidstreamplayer.torrent.TorrentStreamer
@@ -18,25 +17,20 @@ import sk.ziacik.androidstreamplayer.torrent.TorrentStreamer
 class PlaybackController(
 	private val scope: CoroutineScope,
 	private val streamer: TorrentStreamer?,
-	private val subtitleLookup: (suspend (Movie, TorrentSearchResult) -> SubtitleTrack?)? = null,
-	private val subtitleTimeoutMs: Long = DEFAULT_SUBTITLE_TIMEOUT_MS,
-	private val onStreamReady: (TorrentSource, SubtitleTrack?) -> Unit = { _, _ -> },
+	private val subtitleSearch: (suspend (Movie, TorrentSearchResult) -> List<SubtitleOption>)? = null,
+	private val subtitleDownload: (suspend (Movie, TorrentSearchResult, SubtitleOption) -> SubtitleTrack?)? = null,
+	private val onStreamReady: (TorrentSource) -> Unit = {},
+	private val onSubtitleSelected: (SubtitleTrack?) -> Unit = {},
 ) {
-	constructor(
-		scope: CoroutineScope,
-		streamer: TorrentStreamer?,
-		onStreamReady: (TorrentSource) -> Unit,
-	) : this(
-		scope = scope,
-		streamer = streamer,
-		onStreamReady = { source, _ -> onStreamReady(source) },
-	)
-
 	private val mutableState = MutableStateFlow(PlaybackUiState())
 	val state: StateFlow<PlaybackUiState> = mutableState.asStateFlow()
 
 	private var playbackJob: Job? = null
+	private var subtitleSearchJob: Job? = null
+	private var subtitleDownloadJob: Job? = null
 	private var generation = 0L
+	private var activeMovie: Movie? = null
+	private var activeResult: TorrentSearchResult? = null
 
 	fun play(movie: Movie, result: TorrentSearchResult) {
 		playInternal(movie, result)
@@ -47,35 +41,52 @@ class PlaybackController(
 	}
 
 	private fun playInternal(movie: Movie?, result: TorrentSearchResult) {
-		playbackJob?.cancel()
+		cancelJobs()
 		generation += 1
 		val currentGeneration = generation
+		activeMovie = movie
+		activeResult = result
 
 		mutableState.value = PlaybackUiState(
 			selectedResult = result,
 			status = "Preparing stream…",
+			subtitles = SubtitleUiState(
+				isSearching = movie != null && subtitleSearch != null,
+			),
 		)
 
-		playbackJob = scope.launch {
-			val subtitleDeferred = if (movie != null && subtitleLookup != null) {
-				async {
-					try {
-						withTimeoutOrNull(subtitleTimeoutMs) {
-							subtitleLookup.invoke(movie, result)
-						}
-					} catch (error: CancellationException) {
-						throw error
-					} catch (_: Throwable) {
-						null
-					}
+		if (movie != null && subtitleSearch != null) {
+			subtitleSearchJob = scope.launch {
+				try {
+					val options = subtitleSearch.invoke(movie, result)
+					if (generation != currentGeneration) return@launch
+					val current = mutableState.value
+					mutableState.value = current.copy(
+						subtitles = current.subtitles.copy(
+							isSearching = false,
+							options = options,
+							message = if (options.isEmpty()) "No subtitles found" else null,
+						),
+					)
+				} catch (error: CancellationException) {
+					throw error
+				} catch (_: Throwable) {
+					if (generation != currentGeneration) return@launch
+					val current = mutableState.value
+					mutableState.value = current.copy(
+						subtitles = current.subtitles.copy(
+							isSearching = false,
+							message = "Could not find subtitles",
+						),
+					)
 				}
-			} else {
-				null
 			}
+		}
 
+		playbackJob = scope.launch {
 			val activeStreamer = streamer
 			if (activeStreamer == null) {
-				subtitleDeferred?.cancel()
+				subtitleSearchJob?.cancel()
 				publishStatus(result, "Streaming unavailable", currentGeneration)
 				return@launch
 			}
@@ -85,22 +96,80 @@ class PlaybackController(
 			} catch (error: CancellationException) {
 				throw error
 			} catch (_: Throwable) {
-				subtitleDeferred?.cancel()
+				subtitleSearchJob?.cancel()
 				publishStatus(result, "Stream failed", currentGeneration)
 				return@launch
 			}
 
-			val subtitle = subtitleDeferred?.await()
 			if (generation != currentGeneration) return@launch
 
 			try {
-				onStreamReady(source, subtitle)
+				onStreamReady(source)
 			} catch (_: Throwable) {
 				publishStatus(result, "Playback failed", currentGeneration)
 				return@launch
 			}
 
 			publishStatus(result, "Playing", currentGeneration)
+		}
+	}
+
+	fun selectSubtitle(option: SubtitleOption?) {
+		subtitleDownloadJob?.cancel()
+		subtitleDownloadJob = null
+		val currentGeneration = generation
+
+		if (option == null) {
+			try {
+				onSubtitleSelected(null)
+				val current = mutableState.value
+				mutableState.value = current.copy(
+					subtitles = current.subtitles.copy(
+						selectedId = null,
+						loadingId = null,
+						message = null,
+					),
+				)
+			} catch (_: Throwable) {
+				publishSubtitleMessage("Could not disable subtitles", currentGeneration)
+			}
+			return
+		}
+
+		val movie = activeMovie ?: return
+		val result = activeResult ?: return
+		val download = subtitleDownload ?: return
+		val current = mutableState.value
+		if (current.subtitles.options.none { it.id == option.id }) return
+		mutableState.value = current.copy(
+			subtitles = current.subtitles.copy(
+				loadingId = option.id,
+				message = null,
+			),
+		)
+
+		subtitleDownloadJob = scope.launch {
+			try {
+				val track = download.invoke(movie, result, option)
+				if (generation != currentGeneration) return@launch
+				if (track == null) {
+					publishSubtitleMessage("Could not load subtitles", currentGeneration)
+					return@launch
+				}
+				onSubtitleSelected(track)
+				val latest = mutableState.value
+				mutableState.value = latest.copy(
+					subtitles = latest.subtitles.copy(
+						selectedId = option.id,
+						loadingId = null,
+						message = null,
+					),
+				)
+			} catch (error: CancellationException) {
+				throw error
+			} catch (_: Throwable) {
+				publishSubtitleMessage("Could not load subtitles", currentGeneration)
+			}
 		}
 	}
 
@@ -117,10 +186,20 @@ class PlaybackController(
 	}
 
 	fun exit() {
+		cancelJobs()
+		generation += 1
+		activeMovie = null
+		activeResult = null
+		mutableState.value = PlaybackUiState()
+	}
+
+	private fun cancelJobs() {
 		playbackJob?.cancel()
 		playbackJob = null
-		generation += 1
-		mutableState.value = PlaybackUiState()
+		subtitleSearchJob?.cancel()
+		subtitleSearchJob = null
+		subtitleDownloadJob?.cancel()
+		subtitleDownloadJob = null
 	}
 
 	private fun publishStatus(
@@ -129,13 +208,20 @@ class PlaybackController(
 		currentGeneration: Long,
 	) {
 		if (generation != currentGeneration) return
-		mutableState.value = PlaybackUiState(
+		mutableState.value = mutableState.value.copy(
 			selectedResult = result,
 			status = status,
 		)
 	}
 
-	private companion object {
-		const val DEFAULT_SUBTITLE_TIMEOUT_MS = 2_500L
+	private fun publishSubtitleMessage(message: String, currentGeneration: Long) {
+		if (generation != currentGeneration) return
+		val current = mutableState.value
+		mutableState.value = current.copy(
+			subtitles = current.subtitles.copy(
+				loadingId = null,
+				message = message,
+			),
+		)
 	}
 }
