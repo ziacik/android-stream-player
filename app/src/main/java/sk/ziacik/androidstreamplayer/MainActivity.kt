@@ -92,11 +92,13 @@ class MainActivity : ComponentActivity() {
 		playbackController = PlaybackController(
 			scope = appScope,
 			streamer = torrentStreamer,
-			subtitleLookup = subtitleProvider::find,
-			onStreamReady = { source, subtitle ->
-				playerPort.prepare(source, subtitle)
+			subtitleSearch = subtitleProvider::search,
+			subtitleDownload = subtitleProvider::download,
+			onStreamReady = { source ->
+				playerPort.prepare(source)
 				playerPort.play()
 			},
+			onSubtitleSelected = playerPort::selectSubtitle,
 		)
 
 		setContent {
@@ -107,7 +109,14 @@ class MainActivity : ComponentActivity() {
 					torrentSearchController = torrentSearchController,
 					playbackController = playbackController,
 					watchProgressRepository = watchProgressRepository,
-					playerContent = { movie, result, resumePositionMs, onExit ->
+					playerContent = {
+						movie,
+						result,
+						resumePositionMs,
+						subtitleState,
+						onSubtitleSelected,
+						onExit,
+						->
 						WatchProgressEffect(
 							player = playerPort.player,
 							movie = movie,
@@ -119,6 +128,8 @@ class MainActivity : ComponentActivity() {
 							player = playerPort.player,
 							movieTitle = movie?.title ?: "Now playing",
 							result = result,
+							subtitleState = subtitleState,
+							onSubtitleSelected = onSubtitleSelected,
 							onExit = onExit,
 						)
 					},
