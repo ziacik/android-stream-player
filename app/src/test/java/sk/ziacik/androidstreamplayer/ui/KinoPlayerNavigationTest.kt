@@ -29,7 +29,7 @@ class KinoPlayerNavigationTest {
     }
 
     @Test
-    fun visibleOverlayHorizontalKeyMovesBetweenButtons() {
+    fun visibleOverlayHorizontalKeyMovesThroughSubtitleAndPlaybackButtons() {
         assertEquals(
             KinoPlayerAction.MoveFocus(KinoPlayerFocus.SEEK_BACK),
             kinoHorizontalAction(
@@ -40,10 +40,19 @@ class KinoPlayerNavigationTest {
             ),
         )
         assertEquals(
-            KinoPlayerAction.MoveFocus(KinoPlayerFocus.PLAY_PAUSE),
+            KinoPlayerAction.MoveFocus(KinoPlayerFocus.SUBTITLES),
             kinoHorizontalAction(
                 overlayVisible = true,
                 focus = KinoPlayerFocus.SEEK_BACK,
+                direction = -1,
+                repeatCount = 0,
+            ),
+        )
+        assertEquals(
+            KinoPlayerAction.MoveFocus(KinoPlayerFocus.SEEK_BACK),
+            kinoHorizontalAction(
+                overlayVisible = true,
+                focus = KinoPlayerFocus.SUBTITLES,
                 direction = 1,
                 repeatCount = 0,
             ),

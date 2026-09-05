@@ -5,9 +5,14 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
+import sk.ziacik.androidstreamplayer.subtitle.SubtitleOption
+import sk.ziacik.androidstreamplayer.subtitle.SubtitleTrack
 import sk.ziacik.androidstreamplayer.torrent.TorrentSource
 import sk.ziacik.androidstreamplayer.torrent.TorrentStreamer
 
@@ -37,6 +42,159 @@ class PlaybackControllerTest {
 		assertEquals(selected, prepared)
 		assertEquals(source, played)
 		assertEquals("Playing", controller.state.value.status)
+	}
+
+	@Test
+	fun `movie playback starts without waiting for subtitle search`() = runTest {
+		val searchResult = CompletableDeferred<List<SubtitleOption>>()
+		val source = TorrentSource("torrent://stream/matrix.mkv")
+		var played: TorrentSource? = null
+		var searchedSource: TorrentSource? = null
+		val controller = PlaybackController(
+			scope = this,
+			streamer = TorrentStreamer { source },
+			subtitleSearch = { _, _, preparedSource ->
+				searchedSource = preparedSource
+				searchResult.await()
+			},
+			onStreamReady = { played = it },
+		)
+
+		controller.play(movie(), result("matrix"))
+		runCurrent()
+
+		assertEquals(source, played)
+		assertEquals(source, searchedSource)
+		assertEquals("Playing", controller.state.value.status)
+		assertTrue(controller.state.value.subtitles.isSearching)
+
+		val option = option("sk-1", "sk", "Slovak")
+		searchResult.complete(listOf(option))
+		advanceUntilIdle()
+
+		assertFalse(controller.state.value.subtitles.isSearching)
+		assertEquals(listOf(option), controller.state.value.subtitles.options)
+	}
+
+	@Test
+	fun `exact hash match is downloaded and enabled automatically`() = runTest {
+		val exact = option("42", "sk", "Slovak", exactMatch = true)
+		val track = SubtitleTrack(
+			path = "/tmp/matrix-sk.srt",
+			language = "sk",
+			mimeType = "application/x-subrip",
+			label = "Slovak",
+		)
+		var selectedTrack: SubtitleTrack? = null
+		val controller = PlaybackController(
+			scope = this,
+			streamer = TorrentStreamer { TorrentSource("torrent://stream/matrix.mkv") },
+			subtitleSearch = { _, _, _ -> listOf(exact) },
+			subtitleDownload = { _, _, selected ->
+				assertEquals(exact, selected)
+				track
+			},
+			onSubtitleSelected = { selectedTrack = it },
+		)
+
+		controller.play(movie(), result("matrix"))
+		advanceUntilIdle()
+
+		assertEquals(track, selectedTrack)
+		assertEquals(exact.id, controller.state.value.subtitles.selectedId)
+		assertNull(controller.state.value.subtitles.loadingId)
+	}
+
+	@Test
+	fun `non exact subtitle is never enabled automatically`() = runTest {
+		val guess = option("42", "sk", "Slovak", exactMatch = false)
+		var downloadCalled = false
+		var selectedTrack: SubtitleTrack? = null
+		val controller = PlaybackController(
+			scope = this,
+			streamer = TorrentStreamer { TorrentSource("torrent://stream/matrix.mkv") },
+			subtitleSearch = { _, _, _ -> listOf(guess) },
+			subtitleDownload = { _, _, _ ->
+				downloadCalled = true
+				null
+			},
+			onSubtitleSelected = { selectedTrack = it },
+		)
+
+		controller.play(movie(), result("matrix"))
+		advanceUntilIdle()
+
+		assertFalse(downloadCalled)
+		assertNull(selectedTrack)
+		assertNull(controller.state.value.subtitles.selectedId)
+		assertEquals(listOf(guess), controller.state.value.subtitles.options)
+	}
+
+	@Test
+	fun `subtitle search failure is visible and does not block playback`() = runTest {
+		var played = false
+		val controller = PlaybackController(
+			scope = this,
+			streamer = TorrentStreamer { TorrentSource("torrent://stream/matrix.mkv") },
+			subtitleSearch = { _, _, _ -> throw IllegalStateException("provider down") },
+			onStreamReady = { played = true },
+		)
+
+		controller.play(movie(), result("matrix"))
+		advanceUntilIdle()
+
+		assertTrue(played)
+		assertEquals("Playing", controller.state.value.status)
+		assertFalse(controller.state.value.subtitles.isSearching)
+		assertEquals("Could not find subtitles", controller.state.value.subtitles.message)
+	}
+
+	@Test
+	fun `selecting subtitle downloads it and sends track to player`() = runTest {
+		val option = option("sk-1", "sk", "Slovak")
+		val track = SubtitleTrack(
+			path = "/tmp/matrix-sk.srt",
+			language = "sk",
+			mimeType = "application/x-subrip",
+			label = "Slovak",
+		)
+		var selectedTrack: SubtitleTrack? = null
+		val controller = PlaybackController(
+			scope = this,
+			streamer = TorrentStreamer { TorrentSource("torrent://stream/matrix.mkv") },
+			subtitleSearch = { _, _, _ -> listOf(option) },
+			subtitleDownload = { _, _, selected ->
+				assertEquals(option, selected)
+				track
+			},
+			onSubtitleSelected = { selectedTrack = it },
+		)
+
+		controller.play(movie(), result("matrix"))
+		advanceUntilIdle()
+		controller.selectSubtitle(option)
+		advanceUntilIdle()
+
+		assertEquals(track, selectedTrack)
+		assertEquals(option.id, controller.state.value.subtitles.selectedId)
+		assertNull(controller.state.value.subtitles.loadingId)
+	}
+
+	@Test
+	fun `selecting off disables subtitles`() = runTest {
+		val selected = mutableListOf<SubtitleTrack?>()
+		val controller = PlaybackController(
+			scope = this,
+			streamer = TorrentStreamer { TorrentSource("torrent://stream/matrix.mkv") },
+			onSubtitleSelected = { selected += it },
+		)
+
+		controller.play(movie(), result("matrix"))
+		advanceUntilIdle()
+		controller.selectSubtitle(null)
+
+		assertEquals(listOf<SubtitleTrack?>(null), selected)
+		assertNull(controller.state.value.subtitles.selectedId)
 	}
 
 	@Test
@@ -116,17 +274,23 @@ class PlaybackControllerTest {
 
 		assertNull(controller.state.value.selectedResult)
 		assertNull(controller.state.value.status)
+		assertTrue(controller.state.value.subtitles.options.isEmpty())
 	}
 
 	@Test
-	fun `direct magnet creates a dedicated magnet result`() = runTest {
+	fun `direct magnet skips subtitle search`() = runTest {
 		val magnet = "magnet:?xt=urn:btih:ABC123"
 		var prepared: TorrentSearchResult? = null
+		var subtitleSearchCalled = false
 		val controller = PlaybackController(
 			scope = this,
 			streamer = TorrentStreamer { result ->
 				prepared = result
 				TorrentSource("torrent://stream/direct.mkv")
+			},
+			subtitleSearch = { _, _, _ ->
+				subtitleSearchCalled = true
+				emptyList()
 			},
 		)
 
@@ -136,12 +300,39 @@ class PlaybackControllerTest {
 		assertEquals("direct-magnet", prepared?.id)
 		assertEquals("Magnet", prepared?.source)
 		assertEquals(magnet, prepared?.magnetUri)
+		assertFalse(subtitleSearchCalled)
 	}
+
+	private fun movie() = Movie(
+		tmdbId = 603,
+		imdbId = "tt0133093",
+		title = "The Matrix",
+		originalTitle = "The Matrix",
+		releaseYear = 1999,
+		overview = null,
+		voteAverage = null,
+		posterPath = null,
+		backdropPath = null,
+	)
 
 	private fun result(id: String) = TorrentSearchResult(
 		id = id,
 		title = id,
 		magnetUri = "magnet:?xt=urn:btih:$id",
 		seeders = 10,
+	)
+
+	private fun option(
+		id: String,
+		language: String,
+		label: String,
+		exactMatch: Boolean = false,
+	) = SubtitleOption(
+		id = id,
+		language = language,
+		label = label,
+		release = "The.Matrix.1999.1080p.BluRay.x264-GROUP",
+		downloads = 100,
+		exactMatch = exactMatch,
 	)
 }
