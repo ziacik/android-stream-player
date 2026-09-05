@@ -14,12 +14,26 @@ import sk.ziacik.androidstreamplayer.torrent.TorrentSource
 class Media3PlayerPort(context: Context) : PlayerPort {
 	override val player: ExoPlayer = ExoPlayer.Builder(context).build()
 
+	private var currentSource: TorrentSource? = null
+	private var currentSubtitle: SubtitleTrack? = null
+
 	override fun prepare(source: TorrentSource) {
-		prepare(source, null)
+		currentSource = source
+		currentSubtitle = null
+		player.setMediaItem(mediaItem(source, null))
+		player.prepare()
 	}
 
-	fun prepare(source: TorrentSource, subtitle: SubtitleTrack?) {
-		val mediaItem = MediaItem.Builder()
+	fun selectSubtitle(subtitle: SubtitleTrack?) {
+		val source = currentSource ?: return
+		val positionMs = player.currentPosition.coerceAtLeast(0L)
+		currentSubtitle = subtitle
+		player.setMediaItem(mediaItem(source, subtitle), positionMs)
+		player.prepare()
+	}
+
+	private fun mediaItem(source: TorrentSource, subtitle: SubtitleTrack?): MediaItem =
+		MediaItem.Builder()
 			.setUri(source.uri)
 			.apply {
 				subtitle?.let { track ->
@@ -38,10 +52,6 @@ class Media3PlayerPort(context: Context) : PlayerPort {
 				}
 			}
 			.build()
-
-		player.setMediaItem(mediaItem)
-		player.prepare()
-	}
 
 	override fun play() {
 		player.play()
