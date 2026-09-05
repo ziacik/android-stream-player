@@ -115,8 +115,7 @@ class PlaybackController(
 			} catch (error: CancellationException) {
 				throw error
 			} catch (error: Throwable) {
-				Log.e(
-					TAG,
+				logSubtitleError(
 					"Subtitle search failed for movie=${movie.title} (${movie.releaseYear}), " +
 						"torrent=${result.title}, error=${error::class.java.simpleName}: ${error.message}",
 					error,
@@ -187,9 +186,9 @@ class PlaybackController(
 			} catch (error: CancellationException) {
 				throw error
 			} catch (error: Throwable) {
-				Log.e(
-					TAG,
-					"Subtitle download failed for id=${option.id}, error=${error::class.java.simpleName}: ${error.message}",
+				logSubtitleError(
+					"Subtitle download failed for id=${option.id}, " +
+						"error=${error::class.java.simpleName}: ${error.message}",
 					error,
 				)
 				publishSubtitleMessage("Could not load subtitles", currentGeneration)
@@ -255,6 +254,12 @@ class PlaybackController(
 				message = message,
 			),
 		)
+	}
+
+	private fun logSubtitleError(message: String, error: Throwable) {
+		// android.util.Log throws in plain JVM unit tests; on-device this still emits
+		// the full stacktrace while keeping error handling itself side-effect free.
+		runCatching { Log.e(TAG, message, error) }
 	}
 
 	private companion object {
