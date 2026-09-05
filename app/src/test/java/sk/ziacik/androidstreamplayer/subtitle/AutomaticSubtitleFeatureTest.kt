@@ -21,9 +21,9 @@ class AutomaticSubtitleFeatureTest {
 	}
 
 	@Test
-	fun `podnapisi provider is available`() {
+	fun `open subtitles provider is available`() {
 		val providerExists = runCatching {
-			Class.forName("sk.ziacik.androidstreamplayer.subtitle.PodnapisiSubtitleProvider")
+			Class.forName("sk.ziacik.androidstreamplayer.subtitle.OpenSubtitlesSubtitleProvider")
 		}.isSuccess
 
 		assertTrue(providerExists)
