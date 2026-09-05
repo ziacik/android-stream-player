@@ -49,10 +49,14 @@ class PlaybackControllerTest {
 		val searchResult = CompletableDeferred<List<SubtitleOption>>()
 		val source = TorrentSource("torrent://stream/matrix.mkv")
 		var played: TorrentSource? = null
+		var searchedSource: TorrentSource? = null
 		val controller = PlaybackController(
 			scope = this,
 			streamer = TorrentStreamer { source },
-			subtitleSearch = { _, _ -> searchResult.await() },
+			subtitleSearch = { _, _, preparedSource ->
+				searchedSource = preparedSource
+				searchResult.await()
+			},
 			onStreamReady = { played = it },
 		)
 
@@ -60,6 +64,7 @@ class PlaybackControllerTest {
 		runCurrent()
 
 		assertEquals(source, played)
+		assertEquals(source, searchedSource)
 		assertEquals("Playing", controller.state.value.status)
 		assertTrue(controller.state.value.subtitles.isSearching)
 
@@ -72,12 +77,66 @@ class PlaybackControllerTest {
 	}
 
 	@Test
+	fun `exact hash match is downloaded and enabled automatically`() = runTest {
+		val exact = option("42", "sk", "Slovak", exactMatch = true)
+		val track = SubtitleTrack(
+			path = "/tmp/matrix-sk.srt",
+			language = "sk",
+			mimeType = "application/x-subrip",
+			label = "Slovak",
+		)
+		var selectedTrack: SubtitleTrack? = null
+		val controller = PlaybackController(
+			scope = this,
+			streamer = TorrentStreamer { TorrentSource("torrent://stream/matrix.mkv") },
+			subtitleSearch = { _, _, _ -> listOf(exact) },
+			subtitleDownload = { _, _, selected ->
+				assertEquals(exact, selected)
+				track
+			},
+			onSubtitleSelected = { selectedTrack = it },
+		)
+
+		controller.play(movie(), result("matrix"))
+		advanceUntilIdle()
+
+		assertEquals(track, selectedTrack)
+		assertEquals(exact.id, controller.state.value.subtitles.selectedId)
+		assertNull(controller.state.value.subtitles.loadingId)
+	}
+
+	@Test
+	fun `non exact subtitle is never enabled automatically`() = runTest {
+		val guess = option("42", "sk", "Slovak", exactMatch = false)
+		var downloadCalled = false
+		var selectedTrack: SubtitleTrack? = null
+		val controller = PlaybackController(
+			scope = this,
+			streamer = TorrentStreamer { TorrentSource("torrent://stream/matrix.mkv") },
+			subtitleSearch = { _, _, _ -> listOf(guess) },
+			subtitleDownload = { _, _, _ ->
+				downloadCalled = true
+				null
+			},
+			onSubtitleSelected = { selectedTrack = it },
+		)
+
+		controller.play(movie(), result("matrix"))
+		advanceUntilIdle()
+
+		assertFalse(downloadCalled)
+		assertNull(selectedTrack)
+		assertNull(controller.state.value.subtitles.selectedId)
+		assertEquals(listOf(guess), controller.state.value.subtitles.options)
+	}
+
+	@Test
 	fun `subtitle search failure is visible and does not block playback`() = runTest {
 		var played = false
 		val controller = PlaybackController(
 			scope = this,
 			streamer = TorrentStreamer { TorrentSource("torrent://stream/matrix.mkv") },
-			subtitleSearch = { _, _ -> throw IllegalStateException("provider down") },
+			subtitleSearch = { _, _, _ -> throw IllegalStateException("provider down") },
 			onStreamReady = { played = true },
 		)
 
@@ -103,7 +162,7 @@ class PlaybackControllerTest {
 		val controller = PlaybackController(
 			scope = this,
 			streamer = TorrentStreamer { TorrentSource("torrent://stream/matrix.mkv") },
-			subtitleSearch = { _, _ -> listOf(option) },
+			subtitleSearch = { _, _, _ -> listOf(option) },
 			subtitleDownload = { _, _, selected ->
 				assertEquals(option, selected)
 				track
@@ -229,7 +288,7 @@ class PlaybackControllerTest {
 				prepared = result
 				TorrentSource("torrent://stream/direct.mkv")
 			},
-			subtitleSearch = { _, _ ->
+			subtitleSearch = { _, _, _ ->
 				subtitleSearchCalled = true
 				emptyList()
 			},
@@ -263,11 +322,17 @@ class PlaybackControllerTest {
 		seeders = 10,
 	)
 
-	private fun option(id: String, language: String, label: String) = SubtitleOption(
+	private fun option(
+		id: String,
+		language: String,
+		label: String,
+		exactMatch: Boolean = false,
+	) = SubtitleOption(
 		id = id,
 		language = language,
 		label = label,
 		release = "The.Matrix.1999.1080p.BluRay.x264-GROUP",
 		downloads = 100,
+		exactMatch = exactMatch,
 	)
 }
