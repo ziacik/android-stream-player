@@ -107,14 +107,8 @@ class PodnapisiSubtitleProvider internal constructor(
 			return emptyList()
 		}
 
-		val factory = DocumentBuilderFactory.newInstance().apply {
-			isXIncludeAware = false
-			isExpandEntityReferences = false
-			setFeatureIfSupported("http://apache.org/xml/features/disallow-doctype-decl", true)
-			setFeatureIfSupported("http://xml.org/sax/features/external-general-entities", false)
-			setFeatureIfSupported("http://xml.org/sax/features/external-parameter-entities", false)
-			setFeatureIfSupported("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
-		}
+		val factory = DocumentBuilderFactory.newInstance()
+		configurePodnapisiXmlFactory(factory)
 		val document = factory.newDocumentBuilder().parse(ByteArrayInputStream(body))
 		val nodes = document.getElementsByTagName("subtitle")
 		return buildList {
@@ -242,10 +236,6 @@ class PodnapisiSubtitleProvider internal constructor(
 		this[2] == 0x03.toByte() &&
 		this[3] == 0x04.toByte()
 
-	private fun DocumentBuilderFactory.setFeatureIfSupported(name: String, value: Boolean) {
-		runCatching { setFeature(name, value) }
-	}
-
 	private fun Element.childText(name: String): String? =
 		getElementsByTagName(name).item(0)?.textContent
 
@@ -269,6 +259,21 @@ class PodnapisiSubtitleProvider internal constructor(
 		val SUPPORTED_EXTENSIONS = setOf("srt", "vtt", "ass", "ssa")
 		val TOKEN_REGEX = Regex("[a-z0-9]+")
 	}
+}
+
+internal fun configurePodnapisiXmlFactory(factory: DocumentBuilderFactory) {
+	// Android's JAXP implementation may throw UnsupportedOperationException even for false.
+	// XInclude defaults to false, so failure to set it is safe and must not abort parsing.
+	runCatching { factory.isXIncludeAware = false }
+	runCatching { factory.isExpandEntityReferences = false }
+	factory.setFeatureIfSupported("http://apache.org/xml/features/disallow-doctype-decl", true)
+	factory.setFeatureIfSupported("http://xml.org/sax/features/external-general-entities", false)
+	factory.setFeatureIfSupported("http://xml.org/sax/features/external-parameter-entities", false)
+	factory.setFeatureIfSupported("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+}
+
+private fun DocumentBuilderFactory.setFeatureIfSupported(name: String, value: Boolean) {
+	runCatching { setFeature(name, value) }
 }
 
 internal data class SubtitleHttpResponse(
