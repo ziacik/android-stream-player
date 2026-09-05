@@ -18,7 +18,7 @@ import sk.ziacik.androidstreamplayer.torrent.TorrentStreamer
 class PlaybackController(
 	private val scope: CoroutineScope,
 	private val streamer: TorrentStreamer?,
-	private val subtitleSearch: (suspend (Movie, TorrentSearchResult) -> List<SubtitleOption>)? = null,
+	private val subtitleSearch: (suspend (Movie, TorrentSearchResult, TorrentSource) -> List<SubtitleOption>)? = null,
 	private val subtitleDownload: (suspend (Movie, TorrentSearchResult, SubtitleOption) -> SubtitleTrack?)? = null,
 	private val onStreamReady: (TorrentSource) -> Unit = {},
 	private val onSubtitleSelected: (SubtitleTrack?) -> Unit = {},
@@ -56,43 +56,10 @@ class PlaybackController(
 			),
 		)
 
-		if (movie != null && subtitleSearch != null) {
-			subtitleSearchJob = scope.launch {
-				try {
-					val options = subtitleSearch.invoke(movie, result)
-					if (generation != currentGeneration) return@launch
-					val current = mutableState.value
-					mutableState.value = current.copy(
-						subtitles = current.subtitles.copy(
-							isSearching = false,
-							options = options,
-							message = if (options.isEmpty()) "No subtitles found" else null,
-						),
-					)
-				} catch (error: CancellationException) {
-					throw error
-				} catch (error: Throwable) {
-					Log.e(
-						TAG,
-						"Subtitle search failed for movie=${movie.title} (${movie.releaseYear}), torrent=${result.title}",
-						error,
-					)
-					if (generation != currentGeneration) return@launch
-					val current = mutableState.value
-					mutableState.value = current.copy(
-						subtitles = current.subtitles.copy(
-							isSearching = false,
-							message = "Could not find subtitles",
-						),
-					)
-				}
-			}
-		}
-
 		playbackJob = scope.launch {
 			val activeStreamer = streamer
 			if (activeStreamer == null) {
-				subtitleSearchJob?.cancel()
+				publishSubtitleSearchStopped(currentGeneration)
 				publishStatus(result, "Streaming unavailable", currentGeneration)
 				return@launch
 			}
@@ -102,7 +69,7 @@ class PlaybackController(
 			} catch (error: CancellationException) {
 				throw error
 			} catch (_: Throwable) {
-				subtitleSearchJob?.cancel()
+				publishSubtitleSearchStopped(currentGeneration)
 				publishStatus(result, "Stream failed", currentGeneration)
 				return@launch
 			}
@@ -112,11 +79,57 @@ class PlaybackController(
 			try {
 				onStreamReady(source)
 			} catch (_: Throwable) {
+				publishSubtitleSearchStopped(currentGeneration)
 				publishStatus(result, "Playback failed", currentGeneration)
 				return@launch
 			}
 
 			publishStatus(result, "Playing", currentGeneration)
+			if (movie != null && subtitleSearch != null) {
+				startSubtitleSearch(movie, result, source, currentGeneration)
+			}
+		}
+	}
+
+	private fun startSubtitleSearch(
+		movie: Movie,
+		result: TorrentSearchResult,
+		source: TorrentSource,
+		currentGeneration: Long,
+	) {
+		val search = subtitleSearch ?: return
+		subtitleSearchJob = scope.launch {
+			try {
+				val options = search.invoke(movie, result, source)
+				if (generation != currentGeneration) return@launch
+				val current = mutableState.value
+				mutableState.value = current.copy(
+					subtitles = current.subtitles.copy(
+						isSearching = false,
+						options = options,
+						message = if (options.isEmpty()) "No subtitles found" else null,
+					),
+				)
+
+				options.firstOrNull { it.exactMatch }?.let(::selectSubtitle)
+			} catch (error: CancellationException) {
+				throw error
+			} catch (error: Throwable) {
+				Log.e(
+					TAG,
+					"Subtitle search failed for movie=${movie.title} (${movie.releaseYear}), " +
+						"torrent=${result.title}, error=${error::class.java.simpleName}: ${error.message}",
+					error,
+				)
+				if (generation != currentGeneration) return@launch
+				val current = mutableState.value
+				mutableState.value = current.copy(
+					subtitles = current.subtitles.copy(
+						isSearching = false,
+						message = "Could not find subtitles",
+					),
+				)
+			}
 		}
 	}
 
@@ -173,7 +186,12 @@ class PlaybackController(
 				)
 			} catch (error: CancellationException) {
 				throw error
-			} catch (_: Throwable) {
+			} catch (error: Throwable) {
+				Log.e(
+					TAG,
+					"Subtitle download failed for id=${option.id}, error=${error::class.java.simpleName}: ${error.message}",
+					error,
+				)
 				publishSubtitleMessage("Could not load subtitles", currentGeneration)
 			}
 		}
@@ -217,6 +235,14 @@ class PlaybackController(
 		mutableState.value = mutableState.value.copy(
 			selectedResult = result,
 			status = status,
+		)
+	}
+
+	private fun publishSubtitleSearchStopped(currentGeneration: Long) {
+		if (generation != currentGeneration) return
+		val current = mutableState.value
+		mutableState.value = current.copy(
+			subtitles = current.subtitles.copy(isSearching = false),
 		)
 	}
 
