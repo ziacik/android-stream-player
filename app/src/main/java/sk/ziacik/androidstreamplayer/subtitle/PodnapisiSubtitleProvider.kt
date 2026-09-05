@@ -20,20 +20,43 @@ class PodnapisiSubtitleProvider internal constructor(
 	private val cacheDir: File,
 	private val transport: SubtitleHttpTransport = OkHttpSubtitleTransport(),
 ) {
-	suspend fun find(movie: Movie, result: TorrentSearchResult): SubtitleTrack? {
-		val cacheKey = cacheKey(movie, result)
-		findCached(cacheKey)?.let { return it }
+	/**
+	 * Kept temporarily for the playback migration. Name/release matching is only a heuristic,
+	 * so it must never silently enable a subtitle track.
+	 */
+	suspend fun find(movie: Movie, result: TorrentSearchResult): SubtitleTrack? = null
 
+	suspend fun search(movie: Movie, result: TorrentSearchResult): List<SubtitleOption> {
 		val title = movie.originalTitle.ifBlank { movie.title }
-		var candidates = search(title, movie.releaseYear)
+		var candidates = searchByTitle(title, movie.releaseYear)
 		if (candidates.isEmpty() && movie.title.isNotBlank() && movie.title != title) {
-			candidates = search(movie.title, movie.releaseYear)
+			candidates = searchByTitle(movie.title, movie.releaseYear)
 		}
-		val best = candidates.maxWithOrNull(
-			compareBy<SubtitleCandidate> { languageScore(it.language) }
-				.thenBy { releaseSimilarity(it.release, result.title) }
-				.thenBy { it.downloads },
-		) ?: return null
+
+		return candidates
+			.sortedWith(
+				compareByDescending<SubtitleCandidate> { languageScore(it.language) }
+					.thenByDescending { releaseSimilarity(it.release, result.title) }
+					.thenByDescending { it.downloads },
+			)
+			.map { candidate ->
+				SubtitleOption(
+					id = candidate.pid,
+					language = candidate.language,
+					label = languageLabel(candidate.language),
+					release = candidate.release,
+					downloads = candidate.downloads,
+				)
+			}
+	}
+
+	suspend fun download(
+		movie: Movie,
+		result: TorrentSearchResult,
+		option: SubtitleOption,
+	): SubtitleTrack? {
+		val cacheKey = optionCacheKey(movie, result, option)
+		findCached(cacheKey, option.language)?.let { return it }
 
 		val response = transport.execute(
 			Request.Builder()
@@ -41,7 +64,7 @@ class PodnapisiSubtitleProvider internal constructor(
 					BASE_URL.toHttpUrl()
 						.newBuilder()
 						.addPathSegment("subtitles")
-						.addPathSegment(best.pid)
+						.addPathSegment(option.id)
 						.addPathSegment("download")
 						.build(),
 				)
@@ -51,7 +74,7 @@ class PodnapisiSubtitleProvider internal constructor(
 
 		val extracted = extractSubtitle(response.body) ?: return null
 		cacheDir.mkdirs()
-		val output = File(cacheDir, "$cacheKey-${best.language}.${extracted.extension}")
+		val output = File(cacheDir, "$cacheKey.${extracted.extension}")
 		val temp = File(cacheDir, ".${output.name}.tmp")
 		temp.writeBytes(extracted.bytes)
 		if (!temp.renameTo(output)) {
@@ -59,10 +82,10 @@ class PodnapisiSubtitleProvider internal constructor(
 			temp.delete()
 		}
 
-		return output.toTrack(best.language)
+		return output.toTrack(option.language)
 	}
 
-	private suspend fun search(title: String, year: Int?): List<SubtitleCandidate> {
+	private suspend fun searchByTitle(title: String, year: Int?): List<SubtitleCandidate> {
 		val url = BASE_URL.toHttpUrl()
 			.newBuilder()
 			.addPathSegments("subtitles/search/old")
@@ -98,7 +121,9 @@ class PodnapisiSubtitleProvider internal constructor(
 			for (index in 0 until nodes.length) {
 				val element = nodes.item(index) as? Element ?: continue
 				val pid = element.childText("pid")?.trim().orEmpty()
-				val language = normalizeLanguage(element.childText("language")) ?: continue
+				val language = normalizeLanguage(
+					element.childText("language") ?: element.childText("languageId"),
+				) ?: continue
 				if (pid.isEmpty()) continue
 				add(
 					SubtitleCandidate(
@@ -112,24 +137,15 @@ class PodnapisiSubtitleProvider internal constructor(
 		}
 	}
 
-	private fun findCached(cacheKey: String): SubtitleTrack? {
+	private fun findCached(cacheKey: String, language: String): SubtitleTrack? {
 		if (!cacheDir.isDirectory) return null
 		return cacheDir.listFiles()
-			?.asSequence()
-			?.filter { file ->
+			?.firstOrNull { file ->
 				file.isFile &&
-					file.name.startsWith("$cacheKey-") &&
+					file.nameWithoutExtension == cacheKey &&
 					file.extension.lowercase(Locale.ROOT) in SUPPORTED_EXTENSIONS
 			}
-			?.mapNotNull { file ->
-				val language = file.name
-					.removePrefix("$cacheKey-")
-					.substringBefore('.')
-					.takeIf { it in LANGUAGE_PRIORITY }
-					?: return@mapNotNull null
-				file.toTrack(language)
-			}
-			?.maxByOrNull { track -> LANGUAGE_PRIORITY.getValue(track.language) }
+			?.toTrack(language)
 	}
 
 	private fun File.toTrack(language: String) = SubtitleTrack(
@@ -183,11 +199,20 @@ class PodnapisiSubtitleProvider internal constructor(
 		.map { it.value }
 		.toSet()
 
-	private fun cacheKey(movie: Movie, result: TorrentSearchResult): String {
-		val source = result.id.ifBlank { result.title }
-		val digest = MessageDigest.getInstance("SHA-256").digest(source.encodeToByteArray())
-		val shortHash = digest.take(8).joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
-		return "${movie.tmdbId}-$shortHash"
+	private fun optionCacheKey(
+		movie: Movie,
+		result: TorrentSearchResult,
+		option: SubtitleOption,
+	): String {
+		val source = "${movie.tmdbId}|${result.id.ifBlank { result.title }}|${option.id}"
+		return "${movie.tmdbId}-${shortHash(source)}-${option.language}"
+	}
+
+	private fun shortHash(value: String): String {
+		val digest = MessageDigest.getInstance("SHA-256").digest(value.encodeToByteArray())
+		return digest.take(8).joinToString("") { byte ->
+			"%02x".format(Locale.ROOT, byte.toInt() and 0xff)
+		}
 	}
 
 	private fun languageScore(language: String) = LANGUAGE_PRIORITY[language] ?: 0
