@@ -6,4 +6,5 @@ data class SubtitleOption(
 	val label: String,
 	val release: String,
 	val downloads: Int,
+	val exactMatch: Boolean = false,
 )
