@@ -10,6 +10,9 @@ val torrServerAbi = providers.gradleProperty("torrserverAbi").orElse("arm64-v8a"
 val tmdbApiKey = providers.gradleProperty("tmdbApiKey")
     .orElse(providers.environmentVariable("TMDB_API_KEY"))
     .orElse("")
+val openSubtitlesApiKey = providers.gradleProperty("opensubtitlesApiKey")
+    .orElse(providers.environmentVariable("OPENSUBTITLES_API_KEY"))
+    .orElse("")
 val torrServerAssets = mapOf(
     "arm64-v8a" to Pair(
         "TorrServer-android-arm64",
@@ -112,6 +115,7 @@ android {
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey.get()}\"")
+        buildConfigField("String", "OPENSUBTITLES_API_KEY", "\"${openSubtitlesApiKey.get()}\"")
     }
 
     sourceSets {
@@ -144,8 +148,16 @@ val verifyTmdbApiKey = tasks.register("verifyTmdbApiKey") {
     }
 }
 
+val verifyOpenSubtitlesApiKey = tasks.register("verifyOpenSubtitlesApiKey") {
+    doLast {
+        require(openSubtitlesApiKey.get().isNotBlank()) {
+            "OPENSUBTITLES_API_KEY/opensubtitlesApiKey is required for release builds"
+        }
+    }
+}
+
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
-    dependsOn(verifyTmdbApiKey)
+    dependsOn(verifyTmdbApiKey, verifyOpenSubtitlesApiKey)
 }
 
 tasks.matching { it.name == "preBuild" }.configureEach {

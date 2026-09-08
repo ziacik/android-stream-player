@@ -82,7 +82,7 @@ class KinoAppTest {
 				torrentSearchController = torrentSearchController,
 				playbackController = playbackController,
 				watchProgressRepository = watchProgressRepository(),
-				playerContent = { _, result, _, onExit ->
+				playerContent = { _, result, _, _, _, onExit ->
 					Box(
 						modifier = Modifier
 							.testTag("kino-player")
@@ -205,7 +205,7 @@ class KinoAppTest {
 				torrentSearchController = torrentSearchController,
 				playbackController = playbackController,
 				watchProgressRepository = watchProgressRepository(),
-				playerContent = { _, _, _, _ -> Box(Modifier.testTag("kino-player")) },
+				playerContent = { _, _, _, _, _, _ -> Box(Modifier.testTag("kino-player")) },
 			)
 		}
 
@@ -271,7 +271,7 @@ class KinoAppTest {
 				torrentSearchController = torrentSearchController,
 				playbackController = playbackController,
 				watchProgressRepository = watchProgressRepository(listOf(entry)),
-				playerContent = { movie, result, resumePositionMs, onExit ->
+				playerContent = { movie, result, resumePositionMs, _, _, onExit ->
 					playerMovie = movie
 					playerResult = result
 					playerResumePositionMs = resumePositionMs

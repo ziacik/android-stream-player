@@ -80,7 +80,7 @@ class NavigationFocusRegressionTest {
 				torrentSearchController = torrentSearchController,
 				playbackController = playbackController,
 				watchProgressRepository = watchProgressRepository(),
-				playerContent = { _, _, _, _ -> Box(Modifier.testTag("kino-player")) },
+				playerContent = { _, _, _, _, _, _ -> Box(Modifier.testTag("kino-player")) },
 			)
 		}
 

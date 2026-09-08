@@ -19,6 +19,7 @@ import sk.ziacik.androidstreamplayer.playback.PlaybackController
 import sk.ziacik.androidstreamplayer.player.Media3PlayerPort
 import sk.ziacik.androidstreamplayer.search.KnabenTorrentSearchProvider
 import sk.ziacik.androidstreamplayer.search.TorrentSearchController
+import sk.ziacik.androidstreamplayer.subtitle.OpenSubtitlesSubtitleProvider
 import sk.ziacik.androidstreamplayer.torrent.LocalTorrServerRuntime
 import sk.ziacik.androidstreamplayer.torrent.TorrServerClient
 import sk.ziacik.androidstreamplayer.torrent.TorrServerProcess
@@ -71,6 +72,11 @@ class MainActivity : ComponentActivity() {
 		)
 		val torrentStreamer = TorrServerTorrentStreamer(torrentRuntime)
 		val movieCatalog = TmdbMovieCatalog(BuildConfig.TMDB_API_KEY)
+		val subtitleProvider = OpenSubtitlesSubtitleProvider(
+			apiKey = BuildConfig.OPENSUBTITLES_API_KEY,
+			cacheDir = File(cacheDir, SUBTITLE_CACHE_DIR),
+			userAgent = "Kino/${BuildConfig.VERSION_NAME}",
+		)
 
 		movieBrowseController = MovieBrowseController(
 			scope = appScope,
@@ -88,10 +94,13 @@ class MainActivity : ComponentActivity() {
 		playbackController = PlaybackController(
 			scope = appScope,
 			streamer = torrentStreamer,
+			subtitleSearch = subtitleProvider::search,
+			subtitleDownload = subtitleProvider::download,
 			onStreamReady = { source ->
 				playerPort.prepare(source)
 				playerPort.play()
 			},
+			onSubtitleSelected = playerPort::selectSubtitle,
 		)
 
 		setContent {
@@ -102,7 +111,14 @@ class MainActivity : ComponentActivity() {
 					torrentSearchController = torrentSearchController,
 					playbackController = playbackController,
 					watchProgressRepository = watchProgressRepository,
-					playerContent = { movie, result, resumePositionMs, onExit ->
+					playerContent = {
+						movie,
+						result,
+						resumePositionMs,
+						subtitleState,
+						onSubtitleSelected,
+						onExit,
+						->
 						WatchProgressEffect(
 							player = playerPort.player,
 							movie = movie,
@@ -114,6 +130,8 @@ class MainActivity : ComponentActivity() {
 							player = playerPort.player,
 							movieTitle = movie?.title ?: "Now playing",
 							result = result,
+							subtitleState = subtitleState,
+							onSubtitleSelected = onSubtitleSelected,
 							onExit = onExit,
 						)
 					},
@@ -176,5 +194,6 @@ class MainActivity : ComponentActivity() {
 		const val EXTRA_MAGNET = "magnet"
 		const val TORRSERVER_BINARY = "libtorrserver.so"
 		const val TORRSERVER_DATA_DIR = "torrserver"
+		const val SUBTITLE_CACHE_DIR = "subtitles"
 	}
 }

@@ -17,9 +17,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,7 +64,9 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import sk.ziacik.androidstreamplayer.R
+import sk.ziacik.androidstreamplayer.playback.SubtitleUiState
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
+import sk.ziacik.androidstreamplayer.subtitle.SubtitleOption
 
 private const val SEEK_STEP_MS = 10_000L
 private const val OSD_TIMEOUT_MS = 5_000L
@@ -80,6 +86,8 @@ fun KinoPlayerScreen(
     player: Player,
     movieTitle: String,
     result: TorrentSearchResult?,
+    subtitleState: SubtitleUiState,
+    onSubtitleSelected: (SubtitleOption?) -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -96,6 +104,8 @@ fun KinoPlayerScreen(
     var seekFeedback by remember { mutableStateOf<String?>(null) }
     var seekFeedbackVersion by remember { mutableIntStateOf(0) }
     var scrubPositionMs by remember { mutableStateOf<Long?>(null) }
+    var subtitleMenuVisible by remember { mutableStateOf(false) }
+    var subtitleMenuIndex by remember { mutableIntStateOf(0) }
 
     fun showOverlay() {
         overlayVisible = true
@@ -148,8 +158,20 @@ fun KinoPlayerScreen(
         showOverlay()
     }
 
+    fun openSubtitleMenu() {
+        val selectedIndex = subtitleState.selectedId
+            ?.let { selectedId -> subtitleState.options.indexOfFirst { it.id == selectedId } }
+            ?.takeIf { it >= 0 }
+            ?.plus(1)
+            ?: 0
+        subtitleMenuIndex = selectedIndex
+        subtitleMenuVisible = true
+        showOverlay()
+    }
+
     fun activateFocusedControl() {
         when (focusedFocus) {
+            KinoPlayerFocus.SUBTITLES -> openSubtitleMenu()
             KinoPlayerFocus.SEEK_BACK -> seek(-SEEK_STEP_MS, showFullOverlay = true)
             KinoPlayerFocus.PLAY_PAUSE -> togglePlayback()
             KinoPlayerFocus.SEEK_FORWARD -> seek(SEEK_STEP_MS, showFullOverlay = true)
@@ -159,6 +181,10 @@ fun KinoPlayerScreen(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+    }
+
+    LaunchedEffect(subtitleState.options.size) {
+        subtitleMenuIndex = subtitleMenuIndex.coerceIn(0, subtitleState.options.size)
     }
 
     LaunchedEffect(player) {
@@ -178,11 +204,13 @@ fun KinoPlayerScreen(
         isPlaying,
         playbackError,
         focusedFocus,
+        subtitleMenuVisible,
     ) {
         if (
             !overlayVisible ||
             !isPlaying ||
             playbackError ||
+            subtitleMenuVisible ||
             focusedFocus == KinoPlayerFocus.PROGRESS
         ) {
             return@LaunchedEffect
@@ -221,12 +249,21 @@ fun KinoPlayerScreen(
     }
 
     BackHandler {
-        if (overlayVisible) {
-            scrubPositionMs = null
-            overlayVisible = false
-        } else {
-            player.stop()
-            onExit()
+        when {
+            subtitleMenuVisible -> {
+                subtitleMenuVisible = false
+                showOverlay()
+            }
+
+            overlayVisible -> {
+                scrubPositionMs = null
+                overlayVisible = false
+            }
+
+            else -> {
+                player.stop()
+                onExit()
+            }
         }
     }
 
@@ -240,125 +277,161 @@ fun KinoPlayerScreen(
                 val isDown = event.type == KeyEventType.KeyDown
                 val isUp = event.type == KeyEventType.KeyUp
 
-                when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_LEFT,
-                    KeyEvent.KEYCODE_DPAD_RIGHT,
-                    -> {
-                        val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1
-
-                        if (!overlayVisible) {
-                            if (isDown && event.nativeKeyEvent.repeatCount > 0) {
-                                val action = kinoHorizontalAction(
-                                    overlayVisible = false,
-                                    focus = focusedFocus,
-                                    direction = direction,
-                                    repeatCount = event.nativeKeyEvent.repeatCount,
-                                )
-                                if (action is KinoPlayerAction.StartScrub) {
-                                    focusedFocus = KinoPlayerFocus.PROGRESS
-                                    advanceScrub(action.deltaMs)
-                                }
-                            } else if (isUp) {
-                                val action = kinoHorizontalAction(
-                                    overlayVisible = false,
-                                    focus = focusedFocus,
-                                    direction = direction,
-                                    repeatCount = 0,
-                                )
-                                if (action is KinoPlayerAction.SeekBy) {
-                                    seek(action.deltaMs, showFullOverlay = action.showOverlay)
-                                }
-                            }
-                            true
-                        } else if (focusedFocus == KinoPlayerFocus.PROGRESS) {
-                            if (isDown) {
-                                val action = kinoHorizontalAction(
-                                    overlayVisible = true,
-                                    focus = focusedFocus,
-                                    direction = direction,
-                                    repeatCount = event.nativeKeyEvent.repeatCount,
-                                )
-                                if (action is KinoPlayerAction.ScrubBy) {
-                                    advanceScrub(action.deltaMs)
-                                }
-                            } else if (isUp) {
-                                commitScrub()
-                            }
-                            true
-                        } else {
+                if (subtitleMenuVisible) {
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_UP,
+                        KeyEvent.KEYCODE_DPAD_DOWN,
+                        -> {
                             if (isUp) {
-                                val action = kinoHorizontalAction(
-                                    overlayVisible = true,
-                                    focus = focusedFocus,
-                                    direction = direction,
-                                    repeatCount = 0,
-                                )
-                                if (action is KinoPlayerAction.MoveFocus) {
-                                    focusedFocus = action.focus
+                                val delta = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) -1 else 1
+                                subtitleMenuIndex = (subtitleMenuIndex + delta)
+                                    .coerceIn(0, subtitleState.options.size)
+                                showOverlay()
+                            }
+                            true
+                        }
+
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER,
+                        -> {
+                            if (isUp) {
+                                val selected = if (subtitleMenuIndex == 0) {
+                                    null
+                                } else {
+                                    subtitleState.options.getOrNull(subtitleMenuIndex - 1)
+                                }
+                                onSubtitleSelected(selected)
+                                subtitleMenuVisible = false
+                                showOverlay()
+                            }
+                            true
+                        }
+
+                        KeyEvent.KEYCODE_BACK -> false
+                        else -> true
+                    }
+                } else {
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_LEFT,
+                        KeyEvent.KEYCODE_DPAD_RIGHT,
+                        -> {
+                            val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1
+
+                            if (!overlayVisible) {
+                                if (isDown && event.nativeKeyEvent.repeatCount > 0) {
+                                    val action = kinoHorizontalAction(
+                                        overlayVisible = false,
+                                        focus = focusedFocus,
+                                        direction = direction,
+                                        repeatCount = event.nativeKeyEvent.repeatCount,
+                                    )
+                                    if (action is KinoPlayerAction.StartScrub) {
+                                        focusedFocus = KinoPlayerFocus.PROGRESS
+                                        advanceScrub(action.deltaMs)
+                                    }
+                                } else if (isUp) {
+                                    val action = kinoHorizontalAction(
+                                        overlayVisible = false,
+                                        focus = focusedFocus,
+                                        direction = direction,
+                                        repeatCount = 0,
+                                    )
+                                    if (action is KinoPlayerAction.SeekBy) {
+                                        seek(action.deltaMs, showFullOverlay = action.showOverlay)
+                                    }
+                                }
+                                true
+                            } else if (focusedFocus == KinoPlayerFocus.PROGRESS) {
+                                if (isDown) {
+                                    val action = kinoHorizontalAction(
+                                        overlayVisible = true,
+                                        focus = focusedFocus,
+                                        direction = direction,
+                                        repeatCount = event.nativeKeyEvent.repeatCount,
+                                    )
+                                    if (action is KinoPlayerAction.ScrubBy) {
+                                        advanceScrub(action.deltaMs)
+                                    }
+                                } else if (isUp) {
+                                    commitScrub()
+                                }
+                                true
+                            } else {
+                                if (isUp) {
+                                    val action = kinoHorizontalAction(
+                                        overlayVisible = true,
+                                        focus = focusedFocus,
+                                        direction = direction,
+                                        repeatCount = 0,
+                                    )
+                                    if (action is KinoPlayerAction.MoveFocus) {
+                                        focusedFocus = action.focus
+                                        showOverlay()
+                                    }
+                                }
+                                true
+                            }
+                        }
+
+                        KeyEvent.KEYCODE_MEDIA_REWIND,
+                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+                        -> {
+                            if (isUp) {
+                                val delta = if (keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
+                                    -SEEK_STEP_MS
+                                } else {
+                                    SEEK_STEP_MS
+                                }
+                                seek(delta, showFullOverlay = overlayVisible)
+                            }
+                            true
+                        }
+
+                        KeyEvent.KEYCODE_DPAD_UP,
+                        KeyEvent.KEYCODE_DPAD_DOWN,
+                        -> {
+                            if (isUp) {
+                                if (!overlayVisible) {
+                                    focusedFocus = KinoPlayerFocus.PLAY_PAUSE
+                                    showOverlay()
+                                } else {
+                                    val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) -1 else 1
+                                    val nextFocus = kinoVerticalFocus(focusedFocus, direction)
+                                    if (nextFocus != focusedFocus) {
+                                        scrubPositionMs = null
+                                        focusedFocus = nextFocus
+                                    }
                                     showOverlay()
                                 }
                             }
                             true
                         }
-                    }
 
-                    KeyEvent.KEYCODE_MEDIA_REWIND,
-                    KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
-                    -> {
-                        if (isUp) {
-                            val delta = if (keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
-                                -SEEK_STEP_MS
-                            } else {
-                                SEEK_STEP_MS
-                            }
-                            seek(delta, showFullOverlay = overlayVisible)
-                        }
-                        true
-                    }
-
-                    KeyEvent.KEYCODE_DPAD_UP,
-                    KeyEvent.KEYCODE_DPAD_DOWN,
-                    -> {
-                        if (isUp) {
-                            if (!overlayVisible) {
-                                focusedFocus = KinoPlayerFocus.PLAY_PAUSE
-                                showOverlay()
-                            } else {
-                                val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) -1 else 1
-                                val nextFocus = kinoVerticalFocus(focusedFocus, direction)
-                                if (nextFocus != focusedFocus) {
-                                    scrubPositionMs = null
-                                    focusedFocus = nextFocus
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER,
+                        -> {
+                            if (isUp) {
+                                if (!overlayVisible) {
+                                    togglePlayback()
+                                } else {
+                                    activateFocusedControl()
                                 }
-                                showOverlay()
                             }
+                            true
                         }
-                        true
-                    }
 
-                    KeyEvent.KEYCODE_DPAD_CENTER,
-                    KeyEvent.KEYCODE_ENTER,
-                    KeyEvent.KEYCODE_NUMPAD_ENTER,
-                    -> {
-                        if (isUp) {
-                            if (!overlayVisible) {
-                                togglePlayback()
-                            } else {
-                                activateFocusedControl()
-                            }
+                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                        KeyEvent.KEYCODE_MEDIA_PLAY,
+                        KeyEvent.KEYCODE_MEDIA_PAUSE,
+                        -> {
+                            if (isUp) togglePlayback()
+                            true
                         }
-                        true
-                    }
 
-                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-                    KeyEvent.KEYCODE_MEDIA_PLAY,
-                    KeyEvent.KEYCODE_MEDIA_PAUSE,
-                    -> {
-                        if (isUp) togglePlayback()
-                        true
+                        else -> false
                     }
-
-                    else -> false
                 }
             }
             .focusable()
@@ -395,6 +468,16 @@ fun KinoPlayerScreen(
                 focusedFocus = focusedFocus,
                 scrubPositionMs = scrubPositionMs,
                 modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        if (subtitleMenuVisible) {
+            SubtitleSelectorOverlay(
+                subtitleState = subtitleState,
+                highlightedIndex = subtitleMenuIndex,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 56.dp),
             )
         }
 
@@ -460,6 +543,147 @@ fun KinoPlayerScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SubtitleSelectorOverlay(
+    subtitleState: SubtitleUiState,
+    highlightedIndex: Int,
+    modifier: Modifier = Modifier,
+) {
+    val listState = rememberLazyListState()
+    val maxIndex = subtitleState.options.size
+    val safeHighlightedIndex = highlightedIndex.coerceIn(0, maxIndex)
+
+    LaunchedEffect(safeHighlightedIndex) {
+        listState.animateScrollToItem(safeHighlightedIndex)
+    }
+
+    Column(
+        modifier = modifier
+            .width(520.dp)
+            .background(PlayerNearBlack.copy(alpha = 0.96f), RoundedCornerShape(22.dp))
+            .border(1.dp, PlayerChampagne.copy(alpha = 0.24f), RoundedCornerShape(22.dp))
+            .padding(20.dp)
+            .testTag("player-subtitle-menu"),
+    ) {
+        Text(
+            text = "Subtitles",
+            color = Color.White,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = when {
+                subtitleState.isSearching -> "Searching…"
+                subtitleState.options.isEmpty() -> subtitleState.message ?: "No subtitles found"
+                else -> "Choose the release that matches your torrent"
+            },
+            color = PlayerMuted,
+            fontSize = 13.sp,
+        )
+        Spacer(Modifier.height(14.dp))
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.heightIn(max = 360.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            item(key = "off") {
+                SubtitleSelectorRow(
+                    title = "Off",
+                    detail = "Disable subtitles",
+                    highlighted = safeHighlightedIndex == 0,
+                    selected = subtitleState.selectedId == null,
+                    loading = false,
+                )
+            }
+            itemsIndexed(
+                items = subtitleState.options,
+                key = { _, option -> option.id },
+            ) { index, option ->
+                SubtitleSelectorRow(
+                    title = option.label,
+                    detail = option.release.ifBlank { "Unknown release" },
+                    highlighted = safeHighlightedIndex == index + 1,
+                    selected = subtitleState.selectedId == option.id,
+                    loading = subtitleState.loadingId == option.id,
+                )
+            }
+        }
+
+        subtitleState.message
+            ?.takeIf { subtitleState.options.isNotEmpty() }
+            ?.let { message ->
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = message,
+                    color = PlayerChampagne,
+                    fontSize = 12.sp,
+                )
+            }
+    }
+}
+
+@Composable
+private fun SubtitleSelectorRow(
+    title: String,
+    detail: String,
+    highlighted: Boolean,
+    selected: Boolean,
+    loading: Boolean,
+) {
+    val background = if (highlighted) {
+        PlayerChampagne.copy(alpha = 0.16f)
+    } else {
+        Color.Transparent
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(background, RoundedCornerShape(12.dp))
+            .then(
+                if (highlighted) {
+                    Modifier.border(
+                        1.dp,
+                        PlayerChampagne.copy(alpha = 0.60f),
+                        RoundedCornerShape(12.dp),
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = if (highlighted) PlayerChampagneSoft else Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = detail,
+                color = PlayerMuted,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            text = when {
+                loading -> "…"
+                selected -> "✓"
+                else -> ""
+            },
+            color = PlayerChampagne,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -579,6 +803,11 @@ internal fun KinoPlayerOverlay(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    PlayerControlButton(
+                        text = "CC",
+                        focused = focusedFocus == KinoPlayerFocus.SUBTITLES,
+                        modifier = Modifier.testTag("player-subtitles"),
+                    )
                     PlayerControlButton(
                         text = "−10",
                         focused = focusedFocus == KinoPlayerFocus.SEEK_BACK,
