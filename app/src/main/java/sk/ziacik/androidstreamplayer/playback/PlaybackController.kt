@@ -13,6 +13,7 @@ import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 import sk.ziacik.androidstreamplayer.subtitle.SubtitleOption
 import sk.ziacik.androidstreamplayer.subtitle.SubtitleTrack
 import sk.ziacik.androidstreamplayer.torrent.TorrentSource
+import sk.ziacik.androidstreamplayer.torrent.TorrentStartupStats
 import sk.ziacik.androidstreamplayer.torrent.TorrentStreamer
 
 class PlaybackController(
@@ -65,7 +66,9 @@ class PlaybackController(
 			}
 
 			val source = try {
-				activeStreamer.prepare(result)
+				activeStreamer.prepare(result) { stats ->
+					publishStartupStats(result, stats, currentGeneration)
+				}
 			} catch (error: CancellationException) {
 				throw error
 			} catch (_: Throwable) {
@@ -223,6 +226,17 @@ class PlaybackController(
 		subtitleSearchJob = null
 		subtitleDownloadJob?.cancel()
 		subtitleDownloadJob = null
+	}
+
+	private fun publishStartupStats(
+		result: TorrentSearchResult,
+		stats: TorrentStartupStats,
+		currentGeneration: Long,
+	) {
+		if (generation != currentGeneration) return
+		val current = mutableState.value
+		if (current.selectedResult?.id != result.id || current.status != "Preparing stream…") return
+		mutableState.value = current.copy(startupStats = stats)
 	}
 
 	private fun publishStatus(

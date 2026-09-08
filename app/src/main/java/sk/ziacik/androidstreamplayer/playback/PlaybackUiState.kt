@@ -2,6 +2,7 @@ package sk.ziacik.androidstreamplayer.playback
 
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 import sk.ziacik.androidstreamplayer.subtitle.SubtitleOption
+import sk.ziacik.androidstreamplayer.torrent.TorrentStartupStats
 
 data class SubtitleUiState(
 	val isSearching: Boolean = false,
@@ -14,6 +15,7 @@ data class SubtitleUiState(
 data class PlaybackUiState(
 	val selectedResult: TorrentSearchResult? = null,
 	val status: String? = null,
+	val startupStats: TorrentStartupStats? = null,
 	val subtitles: SubtitleUiState = SubtitleUiState(),
 ) {
 	val startingResultId: String?
