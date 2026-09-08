@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1A0E15"/>
+      <stop offset="1" stop-color="#5C1830"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="500" fill="url(#bg)"/>
+  <g transform="translate(92 94)">
+    <path fill="#E7C9A2" d="M0 0h64v238H0z"/>
+    <path fill="#F3DEC2" d="M62 112L160 0h73L128 126z"/>
+    <path fill="#E7C9A2" d="M66 157l62-31 105 112h-77z"/>
+    <path fill="#5C1830" d="M62 93l66 33-66 31z"/>
+  </g>
+  <text x="395" y="232" fill="#F3DEC2" font-size="94" font-family="sans-serif" font-weight="700" letter-spacing="20">KINO</text>
+  <text x="395" y="292" fill="#E7C9A2" font-size="31" font-family="sans-serif">Movies on your TV. Search. Pick. Watch.</text>
+  <rect x="395" y="326" width="118" height="5" rx="2.5" fill="#E7C9A2" opacity=".75"/>
+</svg>

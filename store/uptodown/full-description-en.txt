@@ -1,0 +1,9 @@
+Kino is a movie browser and player designed specifically for Android TV and television remotes. Browse trending movies, search by title, open a movie detail page and choose a source without fighting a phone-style interface on your TV.
+
+Movie information and artwork are provided through TMDB. Kino uses movie identifiers and metadata to search third-party torrent indexes for available releases, then shows useful release details such as resolution, source, video and audio codecs, language, size and reported seed count when the information can be detected.
+
+Playback is handled locally on the Android TV device. Kino includes a TorrServer runtime for supported ARM devices and streams the selected torrent into the built-in Media3 player. The release APK supports both arm64-v8a and armeabi-v7a Android TV hardware.
+
+Kino also remembers partially watched movies so you can resume them from the Home screen. The interface is optimized for D-pad navigation, including Home, Search, movie detail, source selection and player controls.
+
+Kino is free, contains no ads and has no in-app purchases. The app does not host movie files or operate a torrent index; availability and legality of individual sources depend on third-party services, the content and the user's region and rights.

@@ -1,0 +1,1 @@
+Kino is an independent Android TV project focused on a simple remote-first way to browse movies, inspect available sources and play supported media on a television.
