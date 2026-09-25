@@ -41,7 +41,7 @@ class WatchProgressRepository(
 
 		val normalizedPositionMs = positionMs.coerceAtLeast(0L)
 		if (normalizedPositionMs.toDouble() / durationMs.toDouble() >= COMPLETION_THRESHOLD) {
-			remove(movie.tmdbId)
+			remove(movie.resumeKey)
 			return
 		}
 
@@ -52,13 +52,13 @@ class WatchProgressRepository(
 			durationMs = durationMs,
 			updatedAtEpochMs = nowEpochMs(),
 		)
-		val updated = (mutableEntries.value.filterNot { it.movie.tmdbId == movie.tmdbId } + entry)
+		val updated = (mutableEntries.value.filterNot { it.movie.contentKey == movie.contentKey } + entry)
 			.sortedByDescending { it.updatedAtEpochMs }
 		persist(updated)
 	}
 
-	fun remove(tmdbId: Int) {
-		val updated = mutableEntries.value.filterNot { it.movie.tmdbId == tmdbId }
+	fun remove(resumeKey: Int) {
+		val updated = mutableEntries.value.filterNot { it.movie.resumeKey == resumeKey }
 		if (updated == mutableEntries.value) return
 		persistDurably(updated)
 	}
