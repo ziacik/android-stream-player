@@ -96,7 +96,7 @@ class SkTorrentSearchProviderTest {
                     emptySearchPage(),
                     emptySearchPage(),
                     emptySearchPage(),
-                    searchPage(hash, "Za sklom 2. séria COMPLETE 1080p", "8.5 GB", 14),
+                    searchPage(hash, "Za sklem / Za sklom komplet 1. - 3. serie (SK)[WebRip][720p] = CSFD 73%", "22 GB", 8),
                 ),
             ),
         )
@@ -128,7 +128,8 @@ class SkTorrentSearchProviderTest {
         ), session.getUrls.filter { it.encodedPath.endsWith("/torrents.php") }.mapNotNull { it.queryParameter("search") })
         assertEquals(1, results.size)
         assertEquals(hash, results.single().id)
-        assertEquals(14, results.single().seeders)
+        assertEquals(8, results.single().seeders)
+        assertTrue(results.single().title.contains("komplet 1. - 3. serie", ignoreCase = true))
     }
 
     @Test
