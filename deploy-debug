@@ -2,9 +2,78 @@
 set -eu
 
 magnet="${1:-}"
-target="${2:-192.168.0.200:5555}"
+target=""
 package="sk.ziacik.androidstreamplayer"
 activity="$package/.MainActivity"
+
+select_target() {
+    requested_target="${1:-}"
+    if [ -n "$requested_target" ]; then
+        target="$requested_target"
+        return
+    fi
+
+    targets=""
+    labels=""
+
+    while IFS= read -r line; do
+        serial=$(printf '%s\n' "$line" | sed -n 's/^\(.*[^[:space:]]\)[[:space:]][[:space:]]*device\([[:space:]].*\)\{0,1\}$/\1/p')
+        [ -n "$serial" ] || continue
+
+        if [ -z "$targets" ]; then
+            targets="$serial"
+            labels="$line"
+        else
+            targets="$targets
+$serial"
+            labels="$labels
+$line"
+        fi
+    done <<EOF
+$(adb devices -l)
+EOF
+
+    count=$(printf '%s\n' "$targets" | sed '/^$/d' | wc -l | tr -d ' ')
+
+    if [ "$count" -eq 0 ]; then
+        echo "No usable ADB device found." >&2
+        exit 1
+    fi
+
+    if [ "$count" -eq 1 ]; then
+        target="$targets"
+        return
+    fi
+
+    echo "Multiple ADB targets found:"
+    i=1
+    while IFS= read -r label; do
+        printf '  %d) %s\n' "$i" "$label"
+        i=$((i + 1))
+    done <<EOF
+$labels
+EOF
+
+    while :; do
+        printf 'Select target [1-%s]: ' "$count"
+        IFS= read -r choice
+        case "$choice" in
+            ''|*[!0-9]*)
+                echo "Invalid selection." >&2
+                continue
+                ;;
+        esac
+
+        if [ "$choice" -ge 1 ] && [ "$choice" -le "$count" ]; then
+            target=$(printf '%s\n' "$targets" | sed -n "${choice}p")
+            return
+        fi
+
+        echo "Invalid selection." >&2
+    done
+}
+
+select_target "${2:-}"
 
 device_abi="$(adb -s "$target" shell getprop ro.product.cpu.abi | tr -d '\r')"
 case "$device_abi" in
