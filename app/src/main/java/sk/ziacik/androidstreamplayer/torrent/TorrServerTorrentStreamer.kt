@@ -13,14 +13,13 @@ internal class TorrServerTorrentStreamer(
         result: TorrentSearchResult,
         onStartupStats: (TorrentStartupStats) -> Unit,
     ): TorrentSource {
-        runtime.ensureReady()
-
         val torrentFileUrl = result.torrentFileUrl
         val uri = if (torrentFileUrl != null) {
             val fetcher = requireNotNull(torrentFileFetcher) {
                 "Torrent file fetcher is not configured"
             }
             val torrentFile = fetcher(torrentFileUrl)
+            runtime.ensureReady()
             runtime.prepareStreamUrl(
                 torrentFile = torrentFile,
                 torrentFileName = "${result.id}.torrent",
@@ -32,6 +31,7 @@ internal class TorrServerTorrentStreamer(
             require(magnet.startsWith("magnet:?")) {
                 "Torrent source must be a magnet URI"
             }
+            runtime.ensureReady()
             runtime.prepareStreamUrl(
                 magnet = magnet,
                 preferredFilePattern = result.preferredFilePattern,
