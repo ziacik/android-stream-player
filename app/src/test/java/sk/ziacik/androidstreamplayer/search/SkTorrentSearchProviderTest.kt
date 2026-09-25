@@ -231,6 +231,13 @@ class SkTorrentSearchProviderTest {
             return SkTorrentHttpResponse(200, getResponses.removeFirst())
         }
 
+        override suspend fun getBytes(url: HttpUrl): SkTorrentBinaryResponse =
+            SkTorrentBinaryResponse(
+                code = 200,
+                body = "d4:infod".toByteArray(),
+                contentType = "application/x-bittorrent",
+            )
+
         override suspend fun postForm(
             url: HttpUrl,
             fields: Map<String, String>,
