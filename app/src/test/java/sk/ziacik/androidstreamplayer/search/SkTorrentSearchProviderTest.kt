@@ -190,7 +190,7 @@ class SkTorrentSearchProviderTest {
             fields: Map<String, String>,
         ): SkTorrentHttpResponse {
             postedForms += url to fields
-            return SkTorrentHttpResponse(200, authenticatedPage())
+            return SkTorrentHttpResponse(200, """<html><body><a href="usercp.php">Profile</a></body></html>""")
         }
 
         override fun clearCookies() {
