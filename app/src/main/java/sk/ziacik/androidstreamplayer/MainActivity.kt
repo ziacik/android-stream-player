@@ -20,8 +20,10 @@ import sk.ziacik.androidstreamplayer.playback.PlaybackController
 import sk.ziacik.androidstreamplayer.player.Media3PlayerPort
 import sk.ziacik.androidstreamplayer.search.CompositeTorrentSearchProvider
 import sk.ziacik.androidstreamplayer.search.KnabenTorrentSearchProvider
+import sk.ziacik.androidstreamplayer.search.OkHttpSkTorrentSession
 import sk.ziacik.androidstreamplayer.search.SharedPreferencesSkTorrentCredentialsStore
 import sk.ziacik.androidstreamplayer.search.SkTorrentSearchProvider
+import sk.ziacik.androidstreamplayer.search.SkTorrentTorrentFileFetcher
 import sk.ziacik.androidstreamplayer.search.TorrentSearchController
 import sk.ziacik.androidstreamplayer.settings.SettingsController
 import sk.ziacik.androidstreamplayer.subtitle.OpenSubtitlesSubtitleProvider
@@ -77,7 +79,6 @@ class MainActivity : ComponentActivity() {
 			process = torrServerProcess,
 			client = torrServerClient,
 		)
-		val torrentStreamer = TorrServerTorrentStreamer(torrentRuntime)
 		val movieCatalog = TmdbMovieCatalog(BuildConfig.TMDB_API_KEY)
 		val subtitleProvider = OpenSubtitlesSubtitleProvider(
 			apiKey = BuildConfig.OPENSUBTITLES_API_KEY,
@@ -98,6 +99,15 @@ class MainActivity : ComponentActivity() {
 			catalog = movieCatalog,
 		)
 		val skTorrentCredentialsStore = SharedPreferencesSkTorrentCredentialsStore(applicationContext)
+		val skTorrentSession = OkHttpSkTorrentSession()
+		val skTorrentTorrentFileFetcher = SkTorrentTorrentFileFetcher(
+			credentialsStore = skTorrentCredentialsStore,
+			session = skTorrentSession,
+		)
+		val torrentStreamer = TorrServerTorrentStreamer(
+			runtime = torrentRuntime,
+			torrentFileFetcher = skTorrentTorrentFileFetcher::fetch,
+		)
 		settingsController = SettingsController(skTorrentCredentialsStore)
 		torrentSearchController = TorrentSearchController(
 			scope = appScope,
@@ -105,7 +115,10 @@ class MainActivity : ComponentActivity() {
 			provider = CompositeTorrentSearchProvider(
 				listOf(
 					KnabenTorrentSearchProvider(),
-					SkTorrentSearchProvider(skTorrentCredentialsStore),
+					SkTorrentSearchProvider(
+						credentialsStore = skTorrentCredentialsStore,
+						session = skTorrentSession,
+					),
 				),
 			),
 		)
