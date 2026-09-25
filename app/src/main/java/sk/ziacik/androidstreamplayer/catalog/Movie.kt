@@ -29,6 +29,9 @@ data class Movie(
             MediaType.MOVIE -> "movie:$tmdbId"
         }
 
+    val resumeKey: Int
+        get() = if (mediaType == MediaType.EPISODE) contentKey.hashCode() else tmdbId
+
     val displayTitle: String
         get() = if (mediaType == MediaType.EPISODE) {
             val code = seasonNumber?.let { season ->
