@@ -175,6 +175,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.okhttp)
+    implementation(libs.jsoup)
     implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)
