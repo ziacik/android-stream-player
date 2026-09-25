@@ -18,7 +18,9 @@ internal class SkTorrentSearchProvider(
 
         val merged = linkedMapOf<String, TorrentSearchResult>()
         fallbackQueries(movie).forEach { query ->
-            searchQuery(query, movie.mediaType).forEach { result ->
+            searchQuery(query, movie.mediaType)
+                .filter { result -> result.matchesEpisodeRequest(movie) }
+                .forEach { result ->
                 val key = result.infoHashKey()
                 val existing = merged[key]
                 if (existing == null || result.seederCount() > existing.seederCount()) {
