@@ -32,6 +32,13 @@ data class Movie(
     val resumeKey: Int
         get() = if (mediaType == MediaType.EPISODE) contentKey.hashCode() else tmdbId
 
+    val browseKey: Int
+        get() = when (mediaType) {
+            MediaType.MOVIE -> tmdbId
+            MediaType.SERIES -> -tmdbId
+            MediaType.EPISODE -> resumeKey
+        }
+
     val displayTitle: String
         get() = if (mediaType == MediaType.EPISODE) {
             val code = seasonNumber?.let { season ->
