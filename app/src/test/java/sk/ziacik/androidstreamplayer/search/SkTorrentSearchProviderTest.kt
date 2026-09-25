@@ -87,6 +87,51 @@ class SkTorrentSearchProviderTest {
     }
 
     @Test
+    fun `episode search finds season pack through broad title fallback`() = runTest {
+        val hash = "cccccccccccccccccccccccccccccccccccccccc"
+        val session = FakeSession(
+            getResponses = ArrayDeque(
+                listOf(
+                    authenticatedPage(),
+                    emptySearchPage(),
+                    emptySearchPage(),
+                    emptySearchPage(),
+                    searchPage(hash, "Za sklom 2. séria COMPLETE 1080p", "8.5 GB", 14),
+                ),
+            ),
+        )
+        val provider = SkTorrentSearchProvider(
+            credentialsStore = FixedCredentialsStore(SkTorrentCredentials("u", "p")),
+            session = session,
+        )
+
+        val results = provider.search(
+            MovieTorrentSearchRequest(
+                tmdbId = 123,
+                imdbId = null,
+                title = "Episode 8",
+                originalTitle = "Episode 8",
+                year = 2018,
+                mediaType = MediaType.EPISODE,
+                seriesTitle = "Za sklom",
+                originalSeriesTitle = "Za sklom",
+                seasonNumber = 2,
+                episodeNumber = 8,
+            ),
+        )
+
+        assertEquals(listOf(
+            "Za sklom S02E08",
+            "Za sklom 2x08",
+            "Za sklom S02",
+            "Za sklom",
+        ), session.getUrls.filter { it.encodedPath.endsWith("/torrents.php") }.mapNotNull { it.queryParameter("search") })
+        assertEquals(1, results.size)
+        assertEquals(hash, results.single().id)
+        assertEquals(14, results.single().seeders)
+    }
+
+    @Test
     fun `episode search uses TV categories and SxxExx query`() = runTest {
         val hash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         val session = FakeSession(
