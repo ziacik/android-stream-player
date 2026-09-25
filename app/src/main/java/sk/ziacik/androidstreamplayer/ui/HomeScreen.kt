@@ -83,7 +83,7 @@ fun HomeScreen(
 	val state by controller.state.collectAsState()
 	val homeRequester = remember { FocusRequester() }
 	val searchRequester = remember { FocusRequester() }
-	val resumeIds = resumeWatching.map { it.movie.tmdbId }
+	val resumeIds = resumeWatching.map { it.movie.resumeKey }
 	val resumeRequesters = remember(resumeIds) {
 		resumeIds.associateWith { FocusRequester() }
 	}
@@ -91,7 +91,7 @@ fun HomeScreen(
 	val trendingRequesters = remember(trendingIds) {
 		trendingIds.associateWith { FocusRequester() }
 	}
-	val firstResumeRequester = resumeWatching.firstOrNull()?.let { resumeRequesters[it.movie.tmdbId] }
+	val firstResumeRequester = resumeWatching.firstOrNull()?.let { resumeRequesters[it.movie.resumeKey] }
 	val firstTrendingRequester = state.trending.firstOrNull()?.let { trendingRequesters[it.tmdbId] }
 	val resumeDestination = homeState.lastResumeMovieId?.let(resumeRequesters::get) ?: firstResumeRequester
 	val trendingDestination = homeState.lastTrendingMovieId?.let(trendingRequesters::get) ?: firstTrendingRequester
@@ -342,8 +342,8 @@ fun HomeScreen(
 								listState = homeState.resumeRowState,
 								focusRequesters = resumeRequesters,
 								onFocused = { entry ->
-									homeState.lastResumeMovieId = entry.movie.tmdbId
-									homeState.focusedTarget = HomeFocusTarget.Resume(entry.movie.tmdbId)
+									homeState.lastResumeMovieId = entry.movie.resumeKey
+									homeState.focusedTarget = HomeFocusTarget.Resume(entry.movie.resumeKey)
 								},
 								onResume = onResumeWatching,
 								onCancelStarting = onCancelResumeWatching,
@@ -380,9 +380,9 @@ fun HomeScreen(
 					entry = entry,
 					onRemove = {
 						if (pendingResumeRemovalId == null) {
-							pendingResumeRemovalId = entry.movie.tmdbId
+							pendingResumeRemovalId = entry.movie.resumeKey
 							resumeActionEntry = null
-							onRemoveResumeWatching(entry.movie.tmdbId)
+							onRemoveResumeWatching(entry.movie.resumeKey)
 						}
 					},
 					onCancel = {
@@ -602,18 +602,18 @@ private fun HomeResumeWatchingRow(
 		) {
 			itemsIndexed(
 				items = entries,
-				key = { _, entry -> entry.movie.tmdbId },
+				key = { _, entry -> entry.movie.resumeKey },
 			) { index, entry ->
 				HomeResumeWatchingCard(
 					entry = entry,
-					focusRequester = focusRequesters.getValue(entry.movie.tmdbId),
+					focusRequester = focusRequesters.getValue(entry.movie.resumeKey),
 					leftFocusRequester = if (index == 0) FocusRequester.Cancel else null,
 					rightFocusRequester = if (index == entries.lastIndex) FocusRequester.Cancel else null,
 					onFocused = { onFocused(entry) },
 					onResume = { onResume(entry) },
 					onCancelStarting = onCancelStarting,
 					onOpenActions = { onOpenActions(entry) },
-					isStarting = startingMovieId == entry.movie.tmdbId,
+					isStarting = startingMovieId == entry.movie.resumeKey,
 				)
 			}
 		}
@@ -692,7 +692,7 @@ private fun HomeResumeWatchingCard(
 			leftFocusRequester = leftFocusRequester,
 			rightFocusRequester = rightFocusRequester,
 			onFocused = onFocused,
-			testTag = "resume-watching-${entry.movie.tmdbId}",
+			testTag = "resume-watching-${entry.movie.resumeKey}",
 			modifier = Modifier.fillMaxWidth(),
 		)
 
@@ -711,7 +711,7 @@ private fun HomeResumeWatchingCard(
 					.fillMaxWidth()
 					.aspectRatio(2f / 3f)
 					.background(Color.Black.copy(alpha = 0.58f))
-					.testTag("resume-watching-starting-${entry.movie.tmdbId}"),
+					.testTag("resume-watching-starting-${entry.movie.resumeKey}"),
 				contentAlignment = Alignment.Center,
 			) {
 				CircularProgressIndicator(
@@ -731,14 +731,14 @@ private fun HomeResumeWatchingActions(
 ) {
 	val cancelRequester = remember { FocusRequester() }
 	val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-	var waitingForConfirmRelease by remember(entry.movie.tmdbId) { mutableStateOf(true) }
+	var waitingForConfirmRelease by remember(entry.movie.resumeKey) { mutableStateOf(true) }
 	var removeFocused by remember { mutableStateOf(false) }
 	var cancelFocused by remember { mutableStateOf(false) }
 	val removeFocusStyle = resumeActionFocusStyle(removeFocused)
 	val cancelFocusStyle = resumeActionFocusStyle(cancelFocused)
 	val buttonShape = RoundedCornerShape(12.dp)
 
-	LaunchedEffect(entry.movie.tmdbId) {
+	LaunchedEffect(entry.movie.resumeKey) {
 		cancelRequester.requestFocus()
 	}
 
