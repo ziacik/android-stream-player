@@ -88,7 +88,7 @@ internal class SkTorrentSearchProvider(
             throw IOException("SkTorrent session expired")
         }
 
-        val document = Jsoup.parse(response.body, BASE_URL)
+        val document = Jsoup.parse(response.body, SEARCH_URL)
         return document
             .select("""tr:has(a[href*="download.php?id="])""")
             .mapNotNull { row ->
@@ -111,10 +111,14 @@ internal class SkTorrentSearchProvider(
                 val infoCell = cells.getOrNull(2)?.text().orEmpty()
                 val seeders = cells.getOrNull(4)?.text()?.trim()?.toIntOrNull()
 
+                val torrentFileUrl = download.absUrl("href").takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+
                 TorrentSearchResult(
                     id = infoHash,
                     title = title,
                     magnetUri = buildMagnet(infoHash, title),
+                    torrentFileUrl = torrentFileUrl,
                     sizeBytes = parseSizeBytes(infoCell),
                     seeders = seeders,
                     source = SOURCE,
