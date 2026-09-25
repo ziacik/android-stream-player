@@ -87,12 +87,12 @@ fun HomeScreen(
 	val resumeRequesters = remember(resumeIds) {
 		resumeIds.associateWith { FocusRequester() }
 	}
-	val trendingIds = state.trending.map { it.tmdbId }
+	val trendingIds = state.trending.map { it.browseKey }
 	val trendingRequesters = remember(trendingIds) {
 		trendingIds.associateWith { FocusRequester() }
 	}
 	val firstResumeRequester = resumeWatching.firstOrNull()?.let { resumeRequesters[it.movie.resumeKey] }
-	val firstTrendingRequester = state.trending.firstOrNull()?.let { trendingRequesters[it.tmdbId] }
+	val firstTrendingRequester = state.trending.firstOrNull()?.let { trendingRequesters[it.browseKey] }
 	val resumeDestination = homeState.lastResumeMovieId?.let(resumeRequesters::get) ?: firstResumeRequester
 	val trendingDestination = homeState.lastTrendingMovieId?.let(trendingRequesters::get) ?: firstTrendingRequester
 	val contentDestination = resumeDestination ?: trendingDestination
@@ -359,15 +359,15 @@ fun HomeScreen(
 							listState = homeState.trendingRowState,
 							focusRequesters = trendingRequesters,
 							onFocused = { movie ->
-								homeState.lastTrendingMovieId = movie.tmdbId
-								homeState.focusedTarget = HomeFocusTarget.Trending(movie.tmdbId)
+								homeState.lastTrendingMovieId = movie.browseKey
+								homeState.focusedTarget = HomeFocusTarget.Trending(movie.browseKey)
 							},
 							isLoading = state.isLoading,
 							errorMessage = state.errorMessage,
 							onRetry = controller::retry,
 							onMovieSelected = { movie ->
-								homeState.lastTrendingMovieId = movie.tmdbId
-								homeState.focusedTarget = HomeFocusTarget.Trending(movie.tmdbId)
+								homeState.lastTrendingMovieId = movie.browseKey
+								homeState.focusedTarget = HomeFocusTarget.Trending(movie.browseKey)
 								onMovieSelected(movie)
 							},
 						)
@@ -529,12 +529,12 @@ private fun HomeTrendingRow(
 				) {
 					itemsIndexed(
 						items = movies,
-						key = { _, movie -> movie.tmdbId },
+						key = { _, movie -> movie.browseKey },
 					) { index, movie ->
 						MoviePosterCard(
 							movie = movie,
 							onClick = { onMovieSelected(movie) },
-							focusRequester = focusRequesters.getValue(movie.tmdbId),
+							focusRequester = focusRequesters.getValue(movie.browseKey),
 							onFocused = { onFocused(movie) },
 							leftFocusRequester = if (index == 0) FocusRequester.Cancel else null,
 							rightFocusRequester = if (index == movies.lastIndex) FocusRequester.Cancel else null,
