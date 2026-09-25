@@ -13,6 +13,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -87,6 +88,7 @@ internal class TorrServerClient(
     suspend fun prepareStreamUrl(
         magnet: String,
         timeoutMs: Long = METADATA_TIMEOUT_MS,
+        preferredFilePattern: String? = null,
         onStartupStats: (TorrentStartupStats) -> Unit = {},
     ): String {
         require(timeoutMs > 0) { "timeoutMs must be positive" }
@@ -97,6 +99,42 @@ internal class TorrServerClient(
                 .put("link", magnet)
                 .put("save_to_db", false),
         )
+        return prepareAddedTorrent(
+            added = added,
+            timeoutMs = timeoutMs,
+            preferredFilePattern = preferredFilePattern,
+            onStartupStats = onStartupStats,
+        )
+    }
+
+    suspend fun prepareStreamUrl(
+        torrentFile: ByteArray,
+        torrentFileName: String,
+        timeoutMs: Long = METADATA_TIMEOUT_MS,
+        preferredFilePattern: String? = null,
+        onStartupStats: (TorrentStartupStats) -> Unit = {},
+    ): String {
+        require(timeoutMs > 0) { "timeoutMs must be positive" }
+        require(torrentFile.isNotEmpty()) { "torrentFile must not be empty" }
+
+        val added = torrentUpload(
+            torrentFile = torrentFile,
+            torrentFileName = torrentFileName,
+        )
+        return prepareAddedTorrent(
+            added = added,
+            timeoutMs = timeoutMs,
+            preferredFilePattern = preferredFilePattern,
+            onStartupStats = onStartupStats,
+        )
+    }
+
+    private suspend fun prepareAddedTorrent(
+        added: TorrServerTorrentInfo,
+        timeoutMs: Long,
+        preferredFilePattern: String?,
+        onStartupStats: (TorrentStartupStats) -> Unit,
+    ): String {
         if (added.hash.isBlank()) {
             throw IOException("TorrServer did not return torrent hash")
         }
@@ -112,10 +150,11 @@ internal class TorrServerClient(
             )
         }
 
-        val file = ready.files
-            .asSequence()
+        val videoFiles = ready.files
             .filter { it.path.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS }
-            .maxByOrNull { it.length }
+        val file = preferredFilePattern
+            ?.let { pattern -> videoFiles.filter { episodeFileMatches(it.path, pattern) }.maxByOrNull { it.length } }
+            ?: videoFiles.maxByOrNull { it.length }
             ?: throw IOException("Torrent contains no playable video file")
         val fileName = File(file.path).name
 
@@ -281,39 +320,69 @@ internal class TorrServerClient(
         if (!response.isSuccessful) {
             throw IOException("TorrServer torrent request failed with HTTP ${response.code}")
         }
+        return parseTorrentInfo(response.body)
+    }
 
-        return try {
-            val json = JSONObject(response.body)
-            val filesJson = json.optJSONArray("file_stats")
-            val files = buildList {
-                if (filesJson != null) {
-                    for (index in 0 until filesJson.length()) {
-                        val file = filesJson.getJSONObject(index)
-                        add(
-                            TorrServerFileInfo(
-                                id = file.getInt("id"),
-                                path = file.getString("path"),
-                                length = file.getLong("length"),
-                            ),
-                        )
-                    }
+    private suspend fun torrentUpload(
+        torrentFile: ByteArray,
+        torrentFileName: String,
+    ): TorrServerTorrentInfo {
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart(
+                "file",
+                torrentFileName,
+                torrentFile.toRequestBody(TORRENT_MEDIA_TYPE),
+            )
+            .build()
+        val response = transport.execute(
+            Request.Builder()
+                .url(
+                    baseUrl.newBuilder()
+                        .addPathSegment("torrent")
+                        .addPathSegment("upload")
+                        .build(),
+                )
+                .post(body)
+                .build(),
+        )
+        if (!response.isSuccessful) {
+            throw IOException("TorrServer torrent upload failed with HTTP ${response.code}")
+        }
+        return parseTorrentInfo(response.body)
+    }
+
+    private fun parseTorrentInfo(body: String): TorrServerTorrentInfo = try {
+        val json = JSONObject(body)
+        val filesJson = json.optJSONArray("file_stats")
+        val files = buildList {
+            if (filesJson != null) {
+                for (index in 0 until filesJson.length()) {
+                    val file = filesJson.getJSONObject(index)
+                    add(
+                        TorrServerFileInfo(
+                            id = file.getInt("id"),
+                            path = file.getString("path"),
+                            length = file.getLong("length"),
+                        ),
+                    )
                 }
             }
-            TorrServerTorrentInfo(
-                hash = json.optString("hash"),
-                files = files,
-                startupStats = TorrentStartupStats(
-                    activePeers = json.optInt("active_peers"),
-                    totalPeers = json.optInt("total_peers"),
-                    connectedSeeders = json.optInt("connected_seeders"),
-                    downloadSpeedBytesPerSecond = json.optDouble("download_speed", 0.0),
-                    preloadedBytes = json.optLong("preloaded_bytes"),
-                    preloadSizeBytes = json.optLong("preload_size"),
-                ),
-            )
-        } catch (error: Exception) {
-            throw IOException("Invalid TorrServer torrent response", error)
         }
+        TorrServerTorrentInfo(
+            hash = json.optString("hash"),
+            files = files,
+            startupStats = TorrentStartupStats(
+                activePeers = json.optInt("active_peers"),
+                totalPeers = json.optInt("total_peers"),
+                connectedSeeders = json.optInt("connected_seeders"),
+                downloadSpeedBytesPerSecond = json.optDouble("download_speed", 0.0),
+                preloadedBytes = json.optLong("preloaded_bytes"),
+                preloadSizeBytes = json.optLong("preload_size"),
+            ),
+        )
+    } catch (error: Exception) {
+        throw IOException("Invalid TorrServer torrent response", error)
     }
 
     private suspend fun settingsRequest(body: JSONObject): TorrServerHttpResponse {
@@ -346,6 +415,20 @@ internal class TorrServerClient(
         .addPathSegment(pathSegment)
         .build()
 
+    private fun episodeFileMatches(path: String, preferredFilePattern: String): Boolean {
+        val direct = preferredFilePattern.uppercase()
+        if (path.uppercase().contains(direct)) return true
+
+        val match = Regex("""S(\d{1,2})E(\d{1,3})""", RegexOption.IGNORE_CASE)
+            .find(preferredFilePattern)
+            ?: return false
+        val season = match.groupValues[1].toIntOrNull() ?: return false
+        val episode = match.groupValues[2].toIntOrNull() ?: return false
+        return Regex(
+            """(?i)(?:S0?${season}[ ._-]*E0?${episode}|(?<!\d)0?${season}x0?${episode}(?!\d))""",
+        ).containsMatchIn(path)
+    }
+
     private data class TorrServerTorrentInfo(
         val hash: String,
         val files: List<TorrServerFileInfo>,
@@ -360,6 +443,7 @@ internal class TorrServerClient(
 
     private companion object {
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+        val TORRENT_MEDIA_TYPE = "application/x-bittorrent".toMediaType()
         const val METADATA_TIMEOUT_MS = 90_000L
         const val TORRENT_DISCONNECT_TIMEOUT_SECONDS = 120
         const val STARTUP_STATUS_POLL_FACTOR = 5L

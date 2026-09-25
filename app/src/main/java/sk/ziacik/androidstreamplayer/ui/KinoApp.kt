@@ -10,10 +10,12 @@ import androidx.compose.runtime.setValue
 import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.catalog.MovieBrowseController
 import sk.ziacik.androidstreamplayer.catalog.MovieSearchController
+import sk.ziacik.androidstreamplayer.catalog.SeriesController
 import sk.ziacik.androidstreamplayer.playback.PlaybackController
 import sk.ziacik.androidstreamplayer.playback.SubtitleUiState
 import sk.ziacik.androidstreamplayer.search.TorrentSearchController
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
+import sk.ziacik.androidstreamplayer.settings.SettingsController
 import sk.ziacik.androidstreamplayer.subtitle.SubtitleOption
 import sk.ziacik.androidstreamplayer.watch.WatchProgressRepository
 
@@ -21,9 +23,11 @@ import sk.ziacik.androidstreamplayer.watch.WatchProgressRepository
 fun KinoApp(
 	movieBrowseController: MovieBrowseController,
 	movieSearchController: MovieSearchController,
+	seriesController: SeriesController,
 	torrentSearchController: TorrentSearchController,
 	playbackController: PlaybackController,
 	watchProgressRepository: WatchProgressRepository,
+	settingsController: SettingsController,
 	playerContent: @Composable (
 		Movie?,
 		TorrentSearchResult?,
@@ -42,7 +46,7 @@ fun KinoApp(
 	val resumeWatching by watchProgressRepository.entries.collectAsState()
 	val startingResumeMovieId = startingResumeMovieId(
 		playbackStatus = playbackState.status,
-		playbackMovieId = playbackMovie?.tmdbId,
+		playbackMovieId = playbackMovie?.resumeKey,
 	)
 
 	BackHandler(
@@ -72,12 +76,13 @@ fun KinoApp(
 			val movie = selectedMovie!!
 			MovieDetailScreen(
 				movie = movie,
+				seriesController = seriesController,
 				torrentController = torrentSearchController,
 				playbackState = playbackState,
-				onPlay = { result ->
-					playbackMovie = movie
+				onPlay = { playbackItem, result ->
+					playbackMovie = playbackItem
 					resumePositionMs = null
-					playbackController.play(movie, result)
+					playbackController.play(playbackItem, result)
 				},
 				onBack = {
 					playbackController.exit()
@@ -114,12 +119,20 @@ fun KinoApp(
 			)
 		}
 
+		rootScreen == KinoRootScreen.Settings -> {
+			SettingsScreen(
+				controller = settingsController,
+				onBack = { rootScreen = KinoRootScreen.Search },
+			)
+		}
+
 		else -> {
 			MovieSearchScreen(
 				controller = movieSearchController,
 				onMovieSelected = { movie ->
 					selectedMovie = movie
 				},
+				onSettings = { rootScreen = KinoRootScreen.Settings },
 			)
 		}
 	}
@@ -128,4 +141,5 @@ fun KinoApp(
 private enum class KinoRootScreen {
 	Home,
 	Search,
+	Settings,
 }

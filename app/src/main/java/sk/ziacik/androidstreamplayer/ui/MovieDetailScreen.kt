@@ -17,10 +17,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,7 +36,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import sk.ziacik.androidstreamplayer.catalog.MediaType
 import sk.ziacik.androidstreamplayer.catalog.Movie
+import sk.ziacik.androidstreamplayer.catalog.SeriesController
 import sk.ziacik.androidstreamplayer.catalog.tmdbBackdropUrl
 import sk.ziacik.androidstreamplayer.catalog.tmdbPosterUrl
 import sk.ziacik.androidstreamplayer.playback.PlaybackUiState
@@ -41,215 +47,288 @@ import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 
 @Composable
 fun MovieDetailScreen(
-	movie: Movie,
-	torrentController: TorrentSearchController,
-	playbackState: PlaybackUiState,
-	onPlay: (TorrentSearchResult) -> Unit,
-	onBack: () -> Unit,
-	modifier: Modifier = Modifier,
+    movie: Movie,
+    seriesController: SeriesController,
+    torrentController: TorrentSearchController,
+    playbackState: PlaybackUiState,
+    onPlay: (Movie, TorrentSearchResult) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-	val torrentState by torrentController.state.collectAsState()
+    val torrentState by torrentController.state.collectAsState()
+    val seriesState by seriesController.state.collectAsState()
+    var selectedEpisode by remember(movie.contentKey) { mutableStateOf<Movie?>(null) }
 
-	LaunchedEffect(movie.tmdbId) {
-		torrentController.open(movie)
-	}
-	BackHandler(onBack = onBack)
+    LaunchedEffect(movie.contentKey) {
+        selectedEpisode = null
+        torrentController.clear()
+        if (movie.mediaType == MediaType.SERIES) {
+            seriesController.open(movie)
+        } else {
+            seriesController.clear()
+            torrentController.open(movie)
+        }
+    }
 
-	Box(
-		modifier = modifier
-			.fillMaxSize()
-			.testTag("movie-detail")
-			.background(Color(0xFF090607)),
-	) {
-		tmdbBackdropUrl(movie.backdropPath)?.let { backdropUrl ->
-			AsyncImage(
-				model = backdropUrl,
-				contentDescription = null,
-				contentScale = ContentScale.Crop,
-				modifier = Modifier
-					.fillMaxWidth()
-					.fillMaxHeight(0.68f),
-			)
-		}
+    LaunchedEffect(selectedEpisode?.contentKey) {
+        selectedEpisode?.let(torrentController::open)
+    }
 
-		Box(
-			modifier = Modifier
-				.fillMaxSize()
-				.background(
-					Brush.verticalGradient(
-						colorStops = arrayOf(
-							0f to Color.Black.copy(alpha = 0.24f),
-							0.42f to Color(0xFF090607).copy(alpha = 0.68f),
-							0.72f to Color(0xFF090607),
-							1f to Color(0xFF090607),
-						),
-					),
-				),
-		)
-		Box(
-			modifier = Modifier
-				.fillMaxSize()
-				.background(
-					Brush.horizontalGradient(
-						listOf(
-							Color(0xFF090607).copy(alpha = 0.92f),
-							Color.Transparent,
-							Color(0xFF090607).copy(alpha = 0.76f),
-						),
-					),
-				),
-		)
+    BackHandler {
+        if (selectedEpisode != null) {
+            torrentController.clear()
+            selectedEpisode = null
+        } else {
+            seriesController.clear()
+            onBack()
+        }
+    }
 
-		Column(
-			modifier = Modifier
-				.fillMaxSize()
-				.padding(horizontal = 44.dp, vertical = 28.dp),
-			verticalArrangement = Arrangement.spacedBy(22.dp),
-		) {
-			Row(
-				modifier = Modifier.fillMaxWidth(),
-				verticalAlignment = Alignment.CenterVertically,
-			) {
-				Text(
-					text = "KINO",
-					style = MaterialTheme.typography.titleLarge,
-					fontWeight = FontWeight.Black,
-					color = MaterialTheme.colorScheme.secondary,
-				)
-				Spacer(Modifier.weight(1f))
-				Text(
-					text = "BACK  ←",
-					style = MaterialTheme.typography.labelLarge,
-					color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.64f),
-				)
-			}
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("movie-detail")
+            .background(Color(0xFF090607)),
+    ) {
+        tmdbBackdropUrl(movie.backdropPath)?.let { backdropUrl ->
+            AsyncImage(
+                model = backdropUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.68f),
+            )
+        }
 
-			Row(
-				modifier = Modifier
-					.fillMaxWidth()
-					.weight(1f),
-				horizontalArrangement = Arrangement.spacedBy(34.dp),
-			) {
-				MovieIdentity(
-					movie = movie,
-					modifier = Modifier.weight(0.43f),
-				)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to Color.Black.copy(alpha = 0.24f),
+                            0.42f to Color(0xFF090607).copy(alpha = 0.68f),
+                            0.72f to Color(0xFF090607),
+                            1f to Color(0xFF090607),
+                        ),
+                    ),
+                ),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color(0xFF090607).copy(alpha = 0.92f),
+                            Color.Transparent,
+                            Color(0xFF090607).copy(alpha = 0.76f),
+                        ),
+                    ),
+                ),
+        )
 
-				TorrentResults(
-					state = torrentState,
-					startingResultId = playbackState.startingResultId,
-					startupErrorMessage = playbackState.startupErrorMessage,
-					startupStats = playbackState.startupStats,
-					onPlay = onPlay,
-					onRetry = torrentController::retry,
-					modifier = Modifier
-						.weight(0.57f)
-						.fillMaxHeight(),
-				)
-			}
-		}
-	}
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 44.dp, vertical = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "KINO",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.secondary,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "BACK  ←",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.64f),
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(34.dp),
+            ) {
+                MovieIdentity(
+                    movie = movie,
+                    modifier = Modifier.weight(0.43f),
+                )
+
+                when {
+                    movie.mediaType == MediaType.SERIES && selectedEpisode == null -> {
+                        SeriesBrowser(
+                            state = seriesState,
+                            onSeasonSelected = seriesController::selectSeason,
+                            onEpisodeSelected = { episode ->
+                                selectedEpisode = seriesController.episodeMovie(episode)
+                            },
+                            onRetry = seriesController::retry,
+                            modifier = Modifier
+                                .weight(0.57f)
+                                .fillMaxHeight(),
+                        )
+                    }
+
+                    else -> {
+                        val playbackItem = selectedEpisode ?: movie
+                        Column(
+                            modifier = Modifier
+                                .weight(0.57f)
+                                .fillMaxHeight(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            if (selectedEpisode != null) {
+                                TextButton(
+                                    onClick = {
+                                        torrentController.clear()
+                                        selectedEpisode = null
+                                    },
+                                    modifier = Modifier.testTag("back-to-episodes"),
+                                ) {
+                                    Text("← Episodes · ${playbackItem.displayTitle}")
+                                }
+                            }
+
+                            TorrentResults(
+                                state = torrentState,
+                                startingResultId = playbackState.startingResultId,
+                                startupErrorMessage = playbackState.startupErrorMessage,
+                                startupStats = playbackState.startupStats,
+                                onPlay = { result -> onPlay(playbackItem, result) },
+                                onRetry = torrentController::retry,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
 private fun MovieIdentity(
-	movie: Movie,
-	modifier: Modifier = Modifier,
+    movie: Movie,
+    modifier: Modifier = Modifier,
 ) {
-	Row(
-		modifier = modifier.fillMaxHeight(),
-		horizontalArrangement = Arrangement.spacedBy(22.dp),
-		verticalAlignment = Alignment.Bottom,
-	) {
-		MovieDetailPoster(
-			movie = movie,
-			modifier = Modifier.width(156.dp),
-		)
+    Row(
+        modifier = modifier.fillMaxHeight(),
+        horizontalArrangement = Arrangement.spacedBy(22.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        MovieDetailPoster(
+            movie = movie,
+            modifier = Modifier.width(156.dp),
+        )
 
-		Column(
-			modifier = Modifier
-				.weight(1f)
-				.padding(bottom = 8.dp),
-			verticalArrangement = Arrangement.spacedBy(12.dp),
-		) {
-			Text(
-				text = movie.title,
-				style = MaterialTheme.typography.displaySmall,
-				fontWeight = FontWeight.Black,
-				color = MaterialTheme.colorScheme.onSurface,
-				maxLines = 2,
-				overflow = TextOverflow.Ellipsis,
-			)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = movie.title,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
 
-			Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-				movie.releaseYear?.let { year ->
-					Surface(
-						shape = RoundedCornerShape(7.dp),
-						color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
-					) {
-						Text(
-							text = year.toString(),
-							modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-							style = MaterialTheme.typography.labelLarge,
-						)
-					}
-				}
-				movie.voteAverage?.takeIf { it > 0.0 }?.let { rating ->
-					Surface(
-						shape = RoundedCornerShape(7.dp),
-						color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.88f),
-					) {
-						Text(
-							text = "★ %.1f".format(rating),
-							modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-							style = MaterialTheme.typography.labelLarge,
-							fontWeight = FontWeight.Bold,
-						)
-					}
-				}
-			}
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                movie.releaseYear?.let { year ->
+                    Surface(
+                        shape = RoundedCornerShape(7.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+                    ) {
+                        Text(
+                            text = year.toString(),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                }
+                if (movie.mediaType == MediaType.SERIES) {
+                    Surface(
+                        shape = RoundedCornerShape(7.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+                    ) {
+                        Text(
+                            text = "Series",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                }
+                movie.voteAverage?.takeIf { it > 0.0 }?.let { rating ->
+                    Surface(
+                        shape = RoundedCornerShape(7.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.88f),
+                    ) {
+                        Text(
+                            text = "★ %.1f".format(rating),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
 
-			movie.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-				Text(
-					text = overview,
-					style = MaterialTheme.typography.bodyLarge,
-					color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-					maxLines = 8,
-					overflow = TextOverflow.Ellipsis,
-				)
-			}
-		}
-	}
+            movie.overview?.takeIf { it.isNotBlank() }?.let { overview ->
+                Text(
+                    text = overview,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    maxLines = 8,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
 }
 
 @Composable
 private fun MovieDetailPoster(
-	movie: Movie,
-	modifier: Modifier = Modifier,
+    movie: Movie,
+    modifier: Modifier = Modifier,
 ) {
-	val shape = RoundedCornerShape(12.dp)
-	val posterUrl = tmdbPosterUrl(movie.posterPath)
-	Box(
-		modifier = modifier
-			.aspectRatio(2f / 3f)
-			.clip(shape)
-			.background(MaterialTheme.colorScheme.surfaceVariant),
-		contentAlignment = Alignment.Center,
-	) {
-		if (posterUrl != null) {
-			AsyncImage(
-				model = posterUrl,
-				contentDescription = movie.title,
-				contentScale = ContentScale.Crop,
-				modifier = Modifier.fillMaxSize(),
-			)
-		} else {
-			Text(
-				text = movie.title.take(1).uppercase(),
-				style = MaterialTheme.typography.displayLarge,
-				fontWeight = FontWeight.Black,
-				color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-			)
-		}
-	}
+    val shape = RoundedCornerShape(12.dp)
+    val posterUrl = tmdbPosterUrl(movie.posterPath)
+    Box(
+        modifier = modifier
+            .aspectRatio(2f / 3f)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (posterUrl != null) {
+            AsyncImage(
+                model = posterUrl,
+                contentDescription = movie.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                text = movie.title.take(1).uppercase(),
+                style = MaterialTheme.typography.displayLarge,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            )
+        }
+    }
 }

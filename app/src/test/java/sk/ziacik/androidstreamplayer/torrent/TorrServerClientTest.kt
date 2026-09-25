@@ -75,6 +75,67 @@ class TorrServerClientTest {
     }
 
     @Test
+    fun prepareStreamSelectsRequestedEpisodeFromSeasonPack() = runTest {
+        val transport = FakeTransport(
+            responses = mutableListOf(
+                TorrServerHttpResponse(
+                    code = 200,
+                    body = """{"hash":"series123","file_stats":[
+                        {"id":1,"path":"Za.Sklom.S02E07.720p.mkv","length":9000},
+                        {"id":2,"path":"Za.Sklom.S02E08.720p.mkv","length":7000},
+                        {"id":3,"path":"Za.Sklom.S02E09.720p.mkv","length":10000}
+                    ]}""",
+                ),
+                TorrServerHttpResponse(code = 200, body = ""),
+            ),
+        )
+        val client = TorrServerClient(
+            transport = transport,
+            pollIntervalMs = 1,
+        )
+
+        val url = client.prepareStreamUrl(
+            magnet = "magnet:?xt=urn:btih:series",
+            timeoutMs = 1_000,
+            preferredFilePattern = "S02E08",
+        ).toHttpUrl()
+
+        assertEquals("/stream/Za.Sklom.S02E08.720p.mkv", url.encodedPath)
+        assertEquals("2", url.queryParameter("index"))
+    }
+
+    @Test
+    fun prepareStreamUploadsTorrentFileBeforeStreaming() = runTest {
+        val transport = FakeTransport(
+            responses = mutableListOf(
+                TorrServerHttpResponse(
+                    code = 200,
+                    body = """{"hash":"private123","file_stats":[{"id":5,"path":"episode.mkv","length":9000}]}""",
+                ),
+                TorrServerHttpResponse(code = 200, body = ""),
+            ),
+        )
+        val client = TorrServerClient(
+            transport = transport,
+            pollIntervalMs = 1,
+        )
+
+        val url = client.prepareStreamUrl(
+            torrentFile = byteArrayOf(1, 2, 3, 4),
+            torrentFileName = "private.torrent",
+            timeoutMs = 1_000,
+        ).toHttpUrl()
+
+        val upload = transport.requests.first()
+        assertEquals("/torrent/upload", upload.url.encodedPath)
+        assertEquals("POST", upload.method)
+        assertTrue(upload.body?.contentType().toString().startsWith("multipart/form-data"))
+        assertEquals("/stream/episode.mkv", url.encodedPath)
+        assertEquals("private123", url.queryParameter("link"))
+        assertEquals("5", url.queryParameter("index"))
+    }
+
+    @Test
     fun configureStreamingSettingsPreservesExistingSettingsAndDisablesUpload() = runTest {
         val transport = FakeTransport(
             responses = mutableListOf(

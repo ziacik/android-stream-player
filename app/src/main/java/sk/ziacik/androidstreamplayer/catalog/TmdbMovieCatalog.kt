@@ -42,7 +42,7 @@ class TmdbMovieCatalog internal constructor(
         val normalizedQuery = query.trim()
         if (normalizedQuery.isEmpty()) return emptyList()
 
-        val url = "$API_BASE_URL/search/movie".toHttpUrl()
+        val url = "${API_BASE_URL}/search/multi".toHttpUrl()
             .newBuilder()
             .addQueryParameter("api_key", apiKey)
             .addQueryParameter("query", normalizedQuery)
@@ -52,14 +52,14 @@ class TmdbMovieCatalog internal constructor(
 
         val response = transport.execute(Request.Builder().url(url).get().build())
         if (!response.isSuccessful) {
-            throw IOException("TMDB movie search failed with HTTP ${response.code}")
+            throw IOException("TMDB title search failed with HTTP ${response.code}")
         }
 
-        return parseMovies(response.body, "Invalid TMDB movie search response")
+        return parseTitles(response.body, "Invalid TMDB title search response")
     }
 
     suspend fun trending(): List<Movie> {
-        val url = "$API_BASE_URL/trending/movie/week".toHttpUrl()
+        val url = "${API_BASE_URL}/trending/all/week".toHttpUrl()
             .newBuilder()
             .addQueryParameter("api_key", apiKey)
             .addQueryParameter("language", LANGUAGE)
@@ -67,35 +67,90 @@ class TmdbMovieCatalog internal constructor(
 
         val response = transport.execute(Request.Builder().url(url).get().build())
         if (!response.isSuccessful) {
-            throw IOException("TMDB trending movies failed with HTTP ${response.code}")
+            throw IOException("TMDB trending titles failed with HTTP ${response.code}")
         }
 
-        return parseMovies(response.body, "Invalid TMDB trending movies response")
+        return parseTitles(response.body, "Invalid TMDB trending titles response")
     }
 
-    override suspend fun externalIds(tmdbId: Int): MovieExternalIds {
-        val url = "$API_BASE_URL/movie/$tmdbId/external_ids".toHttpUrl()
+    override suspend fun externalIds(tmdbId: Int): MovieExternalIds =
+        externalIdsForPath("movie/$tmdbId")
+
+    override suspend fun externalIds(movie: Movie): MovieExternalIds {
+        val kind = when (movie.mediaType) {
+            MediaType.MOVIE -> "movie"
+            MediaType.SERIES, MediaType.EPISODE -> "tv"
+        }
+        return externalIdsForPath("$kind/${movie.tmdbId}")
+    }
+
+    override suspend fun seasons(tmdbId: Int): List<SeriesSeason> {
+        val body = requestJson("tv/$tmdbId", "TMDB series details")
+        val seasons = body.optJSONArray("seasons") ?: return emptyList()
+        return buildList {
+            for (index in 0 until seasons.length()) {
+                val season = seasons.optJSONObject(index) ?: continue
+                val number = season.optInt("season_number", -1)
+                if (number <= 0) continue
+                add(
+                    SeriesSeason(
+                        number = number,
+                        name = season.optString("name", "Season $number").trim().ifEmpty { "Season $number" },
+                        episodeCount = season.optInt("episode_count", 0).coerceAtLeast(0),
+                        airYear = releaseYear(season.optNullableString("air_date")),
+                        posterPath = season.optNullableString("poster_path"),
+                    ),
+                )
+            }
+        }.sortedBy { it.number }
+    }
+
+    override suspend fun episodes(tmdbId: Int, seasonNumber: Int): List<SeriesEpisode> {
+        val body = requestJson("tv/$tmdbId/season/$seasonNumber", "TMDB season details")
+        val episodes = body.optJSONArray("episodes") ?: return emptyList()
+        return buildList {
+            for (index in 0 until episodes.length()) {
+                val episode = episodes.optJSONObject(index) ?: continue
+                val number = episode.optInt("episode_number", -1)
+                if (number <= 0) continue
+                add(
+                    SeriesEpisode(
+                        number = number,
+                        seasonNumber = seasonNumber,
+                        name = episode.optString("name", "Episode $number").trim().ifEmpty { "Episode $number" },
+                        overview = episode.optNullableString("overview"),
+                        airYear = releaseYear(episode.optNullableString("air_date")),
+                        voteAverage = episode.optNullableDouble("vote_average"),
+                        stillPath = episode.optNullableString("still_path"),
+                    ),
+                )
+            }
+        }.sortedBy { it.number }
+    }
+
+    private suspend fun externalIdsForPath(path: String): MovieExternalIds {
+        val body = requestJson("$path/external_ids", "TMDB external IDs")
+        return MovieExternalIds(imdbId = body.optNullableString("imdb_id"))
+    }
+
+    private suspend fun requestJson(path: String, label: String): JSONObject {
+        val url = "${API_BASE_URL}/$path".toHttpUrl()
             .newBuilder()
             .addQueryParameter("api_key", apiKey)
+            .addQueryParameter("language", LANGUAGE)
             .build()
-
         val response = transport.execute(Request.Builder().url(url).get().build())
         if (!response.isSuccessful) {
-            throw IOException("TMDB external IDs failed with HTTP ${response.code}")
+            throw IOException("$label failed with HTTP ${response.code}")
         }
-
-        val body = try {
+        return try {
             JSONObject(response.body)
         } catch (error: Exception) {
-            throw IOException("Invalid TMDB external IDs response", error)
+            throw IOException("Invalid $label response", error)
         }
-
-        return MovieExternalIds(
-            imdbId = body.optNullableString("imdb_id"),
-        )
     }
 
-    private fun parseMovies(body: String, invalidResponseMessage: String): List<Movie> {
+    private fun parseTitles(body: String, invalidResponseMessage: String): List<Movie> {
         val results = try {
             JSONObject(body).getJSONArray("results")
         } catch (error: Exception) {
@@ -105,22 +160,31 @@ class TmdbMovieCatalog internal constructor(
         return buildList {
             for (index in 0 until results.length()) {
                 val item = results.optJSONObject(index) ?: continue
+                val mediaType = when (item.optString("media_type")) {
+                    "movie" -> MediaType.MOVIE
+                    "tv" -> MediaType.SERIES
+                    else -> continue
+                }
                 val tmdbId = item.optInt("id", -1)
-                val title = item.optString("title", "").trim()
-                if (tmdbId <= 0 || title.isEmpty()) continue
+                if (tmdbId <= 0) continue
+
+                val titleKey = if (mediaType == MediaType.SERIES) "name" else "title"
+                val originalTitleKey = if (mediaType == MediaType.SERIES) "original_name" else "original_title"
+                val dateKey = if (mediaType == MediaType.SERIES) "first_air_date" else "release_date"
+                val title = item.optString(titleKey, "").trim()
+                if (title.isEmpty()) continue
 
                 add(
                     Movie(
                         tmdbId = tmdbId,
                         title = title,
-                        originalTitle = item.optString("original_title", title)
-                            .trim()
-                            .ifEmpty { title },
-                        releaseYear = releaseYear(item.optNullableString("release_date")),
+                        originalTitle = item.optString(originalTitleKey, title).trim().ifEmpty { title },
+                        releaseYear = releaseYear(item.optNullableString(dateKey)),
                         overview = item.optNullableString("overview"),
                         voteAverage = item.optNullableDouble("vote_average"),
                         posterPath = item.optNullableString("poster_path"),
                         backdropPath = item.optNullableString("backdrop_path"),
+                        mediaType = mediaType,
                     ),
                 )
             }
@@ -147,3 +211,6 @@ fun tmdbPosterUrl(path: String?): String? =
 
 fun tmdbBackdropUrl(path: String?): String? =
     path?.takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w1280$it" }
+
+fun tmdbStillUrl(path: String?): String? =
+    path?.takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }

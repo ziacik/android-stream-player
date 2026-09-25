@@ -3,6 +3,7 @@ package sk.ziacik.androidstreamplayer.watch
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import sk.ziacik.androidstreamplayer.catalog.MediaType
 import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 
@@ -77,6 +78,11 @@ internal object WatchProgressJson {
 		.putNullable("voteAverage", movie.voteAverage)
 		.putNullable("posterPath", movie.posterPath)
 		.putNullable("backdropPath", movie.backdropPath)
+		.put("mediaType", movie.mediaType.name)
+		.putNullable("seriesTitle", movie.seriesTitle)
+		.putNullable("originalSeriesTitle", movie.originalSeriesTitle)
+		.putNullable("seasonNumber", movie.seasonNumber)
+		.putNullable("episodeNumber", movie.episodeNumber)
 
 	private fun decodeMovie(value: JSONObject) = Movie(
 		tmdbId = value.getInt("tmdbId"),
@@ -88,25 +94,36 @@ internal object WatchProgressJson {
 		voteAverage = value.nullableDouble("voteAverage"),
 		posterPath = value.nullableString("posterPath"),
 		backdropPath = value.nullableString("backdropPath"),
+		mediaType = runCatching {
+			MediaType.valueOf(value.nullableString("mediaType") ?: MediaType.MOVIE.name)
+		}.getOrDefault(MediaType.MOVIE),
+		seriesTitle = value.nullableString("seriesTitle"),
+		originalSeriesTitle = value.nullableString("originalSeriesTitle"),
+		seasonNumber = value.nullableInt("seasonNumber"),
+		episodeNumber = value.nullableInt("episodeNumber"),
 	)
 
 	private fun encodeResult(result: TorrentSearchResult) = JSONObject()
 		.put("id", result.id)
 		.put("title", result.title)
 		.put("magnetUri", result.magnetUri)
+		.putNullable("torrentFileUrl", result.torrentFileUrl)
 		.putNullable("quality", result.quality)
 		.putNullable("sizeBytes", result.sizeBytes)
 		.putNullable("seeders", result.seeders)
 		.putNullable("source", result.source)
+		.putNullable("preferredFilePattern", result.preferredFilePattern)
 
 	private fun decodeResult(value: JSONObject) = TorrentSearchResult(
 		id = value.getString("id"),
 		title = value.getString("title"),
 		magnetUri = value.getString("magnetUri"),
+		torrentFileUrl = value.nullableString("torrentFileUrl"),
 		quality = value.nullableString("quality"),
 		sizeBytes = value.nullableLong("sizeBytes"),
 		seeders = value.nullableInt("seeders"),
 		source = value.nullableString("source"),
+		preferredFilePattern = value.nullableString("preferredFilePattern"),
 	)
 }
 

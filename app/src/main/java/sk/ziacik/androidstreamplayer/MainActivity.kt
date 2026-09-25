@@ -14,11 +14,18 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import sk.ziacik.androidstreamplayer.catalog.MovieBrowseController
 import sk.ziacik.androidstreamplayer.catalog.MovieSearchController
+import sk.ziacik.androidstreamplayer.catalog.SeriesController
 import sk.ziacik.androidstreamplayer.catalog.TmdbMovieCatalog
 import sk.ziacik.androidstreamplayer.playback.PlaybackController
 import sk.ziacik.androidstreamplayer.player.Media3PlayerPort
+import sk.ziacik.androidstreamplayer.search.CompositeTorrentSearchProvider
 import sk.ziacik.androidstreamplayer.search.KnabenTorrentSearchProvider
+import sk.ziacik.androidstreamplayer.search.OkHttpSkTorrentSession
+import sk.ziacik.androidstreamplayer.search.SharedPreferencesSkTorrentCredentialsStore
+import sk.ziacik.androidstreamplayer.search.SkTorrentSearchProvider
+import sk.ziacik.androidstreamplayer.search.SkTorrentTorrentFileFetcher
 import sk.ziacik.androidstreamplayer.search.TorrentSearchController
+import sk.ziacik.androidstreamplayer.settings.SettingsController
 import sk.ziacik.androidstreamplayer.subtitle.OpenSubtitlesSubtitleProvider
 import sk.ziacik.androidstreamplayer.torrent.LocalTorrServerRuntime
 import sk.ziacik.androidstreamplayer.torrent.TorrServerClient
@@ -39,6 +46,8 @@ class MainActivity : ComponentActivity() {
 
 	private lateinit var movieBrowseController: MovieBrowseController
 	private lateinit var movieSearchController: MovieSearchController
+	private lateinit var seriesController: SeriesController
+	private lateinit var settingsController: SettingsController
 	private lateinit var torrentSearchController: TorrentSearchController
 	private lateinit var playbackController: PlaybackController
 	private lateinit var playerPort: Media3PlayerPort
@@ -70,7 +79,6 @@ class MainActivity : ComponentActivity() {
 			process = torrServerProcess,
 			client = torrServerClient,
 		)
-		val torrentStreamer = TorrServerTorrentStreamer(torrentRuntime)
 		val movieCatalog = TmdbMovieCatalog(BuildConfig.TMDB_API_KEY)
 		val subtitleProvider = OpenSubtitlesSubtitleProvider(
 			apiKey = BuildConfig.OPENSUBTITLES_API_KEY,
@@ -86,10 +94,33 @@ class MainActivity : ComponentActivity() {
 			scope = appScope,
 			catalog = movieCatalog,
 		)
+		seriesController = SeriesController(
+			scope = appScope,
+			catalog = movieCatalog,
+		)
+		val skTorrentCredentialsStore = SharedPreferencesSkTorrentCredentialsStore(applicationContext)
+		val skTorrentSession = OkHttpSkTorrentSession()
+		val skTorrentTorrentFileFetcher = SkTorrentTorrentFileFetcher(
+			credentialsStore = skTorrentCredentialsStore,
+			session = skTorrentSession,
+		)
+		val torrentStreamer = TorrServerTorrentStreamer(
+			runtime = torrentRuntime,
+			torrentFileFetcher = skTorrentTorrentFileFetcher::fetch,
+		)
+		settingsController = SettingsController(skTorrentCredentialsStore)
 		torrentSearchController = TorrentSearchController(
 			scope = appScope,
 			catalog = movieCatalog,
-			provider = KnabenTorrentSearchProvider(),
+			provider = CompositeTorrentSearchProvider(
+				listOf(
+					KnabenTorrentSearchProvider(),
+					SkTorrentSearchProvider(
+						credentialsStore = skTorrentCredentialsStore,
+						session = skTorrentSession,
+					),
+				),
+			),
 		)
 		playbackController = PlaybackController(
 			scope = appScope,
@@ -108,9 +139,11 @@ class MainActivity : ComponentActivity() {
 				KinoApp(
 					movieBrowseController = movieBrowseController,
 					movieSearchController = movieSearchController,
+					seriesController = seriesController,
 					torrentSearchController = torrentSearchController,
 					playbackController = playbackController,
 					watchProgressRepository = watchProgressRepository,
+					settingsController = settingsController,
 					playerContent = {
 						movie,
 						result,
@@ -128,7 +161,7 @@ class MainActivity : ComponentActivity() {
 						)
 						KinoPlayerScreen(
 							player = playerPort.player,
-							movieTitle = movie?.title ?: "Now playing",
+							movieTitle = movie?.displayTitle ?: "Now playing",
 							result = result,
 							subtitleState = subtitleState,
 							onSubtitleSelected = onSubtitleSelected,

@@ -34,7 +34,7 @@ class TorrentSearchController(
 
 		searchJob = scope.launch {
 			val imdbId = try {
-				catalog.externalIds(movie.tmdbId).imdbId ?: movie.imdbId
+				catalog.externalIds(movie).imdbId ?: movie.imdbId
 			} catch (error: CancellationException) {
 				throw error
 			} catch (_: Throwable) {
@@ -47,10 +47,19 @@ class TorrentSearchController(
 				title = movie.title,
 				originalTitle = movie.originalTitle,
 				year = movie.releaseYear,
+				mediaType = movie.mediaType,
+				seriesTitle = movie.seriesTitle,
+				originalSeriesTitle = movie.originalSeriesTitle,
+				seasonNumber = movie.seasonNumber,
+				episodeNumber = movie.episodeNumber,
 			)
 
 			try {
-				val results = provider.search(request).map(::enrichReleaseInfo)
+				val results = provider.search(request)
+					.map { result ->
+						result.copy(preferredFilePattern = request.episodeCode)
+					}
+					.map(::enrichReleaseInfo)
 				if (generation != currentGeneration) return@launch
 
 				mutableState.value = TorrentSearchUiState(
