@@ -7,6 +7,11 @@ internal interface TorrServerRuntime {
         magnet: String,
         onStartupStats: (TorrentStartupStats) -> Unit,
     ): String = prepareStreamUrl(magnet)
+    suspend fun prepareStreamUrl(
+        magnet: String,
+        preferredFilePattern: String?,
+        onStartupStats: (TorrentStartupStats) -> Unit,
+    ): String = prepareStreamUrl(magnet, onStartupStats)
     suspend fun stop()
 }
 
@@ -26,6 +31,16 @@ internal class LocalTorrServerRuntime(
         onStartupStats: (TorrentStartupStats) -> Unit,
     ): String = client.prepareStreamUrl(
         magnet = magnet,
+        onStartupStats = onStartupStats,
+    )
+
+    override suspend fun prepareStreamUrl(
+        magnet: String,
+        preferredFilePattern: String?,
+        onStartupStats: (TorrentStartupStats) -> Unit,
+    ): String = client.prepareStreamUrl(
+        magnet = magnet,
+        preferredFilePattern = preferredFilePattern,
         onStartupStats = onStartupStats,
     )
 
