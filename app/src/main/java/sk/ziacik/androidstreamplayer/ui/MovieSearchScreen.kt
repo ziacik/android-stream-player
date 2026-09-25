@@ -89,7 +89,7 @@ fun MovieSearchScreen(
 	val state by controller.state.collectAsState()
 	val searchRequester = remember { FocusRequester() }
 	val gridState = rememberLazyGridState()
-	val movieIds = state.results.map { it.tmdbId }
+	val movieIds = state.results.map { it.browseKey }
 	val posterRequesters = remember(movieIds) {
 		movieIds.associateWith { FocusRequester() }
 	}
@@ -98,7 +98,7 @@ fun MovieSearchScreen(
 		resumeIds.associateWith { FocusRequester() }
 	}
 	val firstResumeRequester = resumeWatching.firstOrNull()?.let { resumeRequesters[it.movie.resumeKey] }
-	val firstPosterRequester = state.results.firstOrNull()?.let { posterRequesters[it.tmdbId] }
+	val firstPosterRequester = state.results.firstOrNull()?.let { posterRequesters[it.browseKey] }
 	var initialFocusHandled by remember { mutableStateOf(false) }
 	var resumeActionEntry by remember { mutableStateOf<WatchProgressEntry?>(null) }
 
@@ -114,7 +114,7 @@ fun MovieSearchScreen(
 
 		val rememberedMovieId = state.focusedMovieId
 		if (rememberedMovieId != null) {
-			val index = state.results.indexOfFirst { it.tmdbId == rememberedMovieId }
+			val index = state.results.indexOfFirst { it.browseKey == rememberedMovieId }
 			if (index >= 0) {
 				gridState.scrollToItem(index)
 				posterRequesters[rememberedMovieId]?.requestFocus()
@@ -223,15 +223,15 @@ fun MovieSearchScreen(
 						) {
 							itemsIndexed(
 								items = state.results,
-								key = { _, movie -> movie.tmdbId },
+								key = { _, movie -> movie.browseKey },
 							) { index, movie ->
-								val requester = posterRequesters.getValue(movie.tmdbId)
+								val requester = posterRequesters.getValue(movie.browseKey)
 								MoviePosterCard(
 									movie = movie,
 									onClick = { onMovieSelected(movie) },
 									focusRequester = requester,
 									upFocusRequester = searchRequester.takeIf { index < POSTER_COLUMNS },
-									onFocused = { controller.setFocusedMovie(movie.tmdbId) },
+									onFocused = { controller.setFocusedMovie(movie.browseKey) },
 									modifier = Modifier.fillMaxWidth(),
 								)
 							}
