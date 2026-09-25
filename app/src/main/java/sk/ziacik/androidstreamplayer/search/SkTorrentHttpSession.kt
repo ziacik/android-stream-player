@@ -18,8 +18,18 @@ internal data class SkTorrentHttpResponse(
         get() = code in 200..299
 }
 
+internal data class SkTorrentBinaryResponse(
+    val code: Int,
+    val body: ByteArray,
+    val contentType: String?,
+) {
+    val isSuccessful: Boolean
+        get() = code in 200..299
+}
+
 internal interface SkTorrentHttpSession {
     suspend fun get(url: HttpUrl): SkTorrentHttpResponse
+    suspend fun getBytes(url: HttpUrl): SkTorrentBinaryResponse
     suspend fun postForm(url: HttpUrl, fields: Map<String, String>): SkTorrentHttpResponse
     fun clearCookies()
 }
@@ -32,8 +42,20 @@ internal class OkHttpSkTorrentSession : SkTorrentHttpSession {
         .followSslRedirects(true)
         .build()
 
-    override suspend fun get(url: HttpUrl): SkTorrentHttpResponse =
-        execute(Request.Builder().url(url).get().header("User-Agent", USER_AGENT).build())
+    override suspend fun get(url: HttpUrl): SkTorrentHttpResponse {
+        val response = executeBytes(
+            Request.Builder().url(url).get().header("User-Agent", USER_AGENT).build(),
+        )
+        return SkTorrentHttpResponse(
+            code = response.code,
+            body = response.body.toString(Charsets.UTF_8),
+        )
+    }
+
+    override suspend fun getBytes(url: HttpUrl): SkTorrentBinaryResponse =
+        executeBytes(
+            Request.Builder().url(url).get().header("User-Agent", USER_AGENT).build(),
+        )
 
     override suspend fun postForm(
         url: HttpUrl,
@@ -42,12 +64,16 @@ internal class OkHttpSkTorrentSession : SkTorrentHttpSession {
         val body = FormBody.Builder().apply {
             fields.forEach { (key, value) -> add(key, value) }
         }.build()
-        return execute(
+        val response = executeBytes(
             Request.Builder()
                 .url(url)
                 .post(body)
                 .header("User-Agent", USER_AGENT)
                 .build(),
+        )
+        return SkTorrentHttpResponse(
+            code = response.code,
+            body = response.body.toString(Charsets.UTF_8),
         )
     }
 
@@ -55,13 +81,14 @@ internal class OkHttpSkTorrentSession : SkTorrentHttpSession {
         cookieJar.clear()
     }
 
-    private suspend fun execute(request: Request): SkTorrentHttpResponse =
+    private suspend fun executeBytes(request: Request): SkTorrentBinaryResponse =
         withContext(Dispatchers.IO) {
             try {
                 client.newCall(request).execute().use { response ->
-                    SkTorrentHttpResponse(
+                    SkTorrentBinaryResponse(
                         code = response.code,
-                        body = response.body.string(),
+                        body = response.body.bytes(),
+                        contentType = response.header("Content-Type"),
                     )
                 }
             } catch (error: IOException) {
