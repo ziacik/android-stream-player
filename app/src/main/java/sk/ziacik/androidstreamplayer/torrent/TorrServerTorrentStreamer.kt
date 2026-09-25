@@ -21,6 +21,7 @@ internal class TorrServerTorrentStreamer(
         return TorrentSource(
             uri = runtime.prepareStreamUrl(
                 magnet = magnet,
+                preferredFilePattern = result.preferredFilePattern,
                 onStartupStats = onStartupStats,
             ),
         )
