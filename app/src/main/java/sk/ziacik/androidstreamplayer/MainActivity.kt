@@ -17,7 +17,9 @@ import sk.ziacik.androidstreamplayer.catalog.MovieSearchController
 import sk.ziacik.androidstreamplayer.catalog.TmdbMovieCatalog
 import sk.ziacik.androidstreamplayer.playback.PlaybackController
 import sk.ziacik.androidstreamplayer.player.Media3PlayerPort
+import sk.ziacik.androidstreamplayer.search.CompositeTorrentSearchProvider
 import sk.ziacik.androidstreamplayer.search.KnabenTorrentSearchProvider
+import sk.ziacik.androidstreamplayer.search.SkTorrentSearchProvider
 import sk.ziacik.androidstreamplayer.search.TorrentSearchController
 import sk.ziacik.androidstreamplayer.subtitle.OpenSubtitlesSubtitleProvider
 import sk.ziacik.androidstreamplayer.torrent.LocalTorrServerRuntime
@@ -89,7 +91,12 @@ class MainActivity : ComponentActivity() {
 		torrentSearchController = TorrentSearchController(
 			scope = appScope,
 			catalog = movieCatalog,
-			provider = KnabenTorrentSearchProvider(),
+			provider = CompositeTorrentSearchProvider(
+				listOf(
+					KnabenTorrentSearchProvider(),
+					SkTorrentSearchProvider(),
+				),
+			),
 		)
 		playbackController = PlaybackController(
 			scope = appScope,
