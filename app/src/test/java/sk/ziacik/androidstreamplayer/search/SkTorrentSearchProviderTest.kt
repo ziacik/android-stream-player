@@ -24,7 +24,7 @@ class SkTorrentSearchProviderTest {
                 ),
             ),
         )
-        val credentials = SkTorrentCredentials("tester", ";t%X3P\$9bm&b-^K")
+        val credentials = SkTorrentCredentials("tester", "p%a&ss^word")
         val provider = SkTorrentSearchProvider(
             credentialsStore = FixedCredentialsStore(credentials),
             session = session,
