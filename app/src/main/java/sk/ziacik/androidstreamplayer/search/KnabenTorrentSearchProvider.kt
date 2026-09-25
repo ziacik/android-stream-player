@@ -1,6 +1,7 @@
 package sk.ziacik.androidstreamplayer.search
 
 import java.io.IOException
+import sk.ziacik.androidstreamplayer.catalog.MediaType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -43,7 +44,7 @@ internal class KnabenTorrentSearchProvider(
 		val merged = linkedMapOf<String, TorrentSearchResult>()
 
 		fallbackQueries(movie).forEach { query ->
-			searchQuery(query).forEach { result ->
+			searchQuery(query, movie.mediaType).forEach { result ->
 				val key = result.deduplicationKey()
 				val existing = merged[key]
 				if (existing == null || result.seederCount() > existing.seederCount()) {
@@ -58,7 +59,7 @@ internal class KnabenTorrentSearchProvider(
 		)
 	}
 
-	private suspend fun searchQuery(query: String): List<TorrentSearchResult> {
+	private suspend fun searchQuery(query: String, mediaType: MediaType): List<TorrentSearchResult> {
 		val normalizedQuery = query.trim()
 		if (normalizedQuery.isEmpty()) return emptyList()
 
@@ -68,7 +69,7 @@ internal class KnabenTorrentSearchProvider(
 			.put("order_direction", "desc")
 			.put(
 				"categories",
-				JSONArray().put(MOVIES_CATEGORY),
+				JSONArray().put(if (mediaType == MediaType.MOVIE) MOVIES_CATEGORY else TV_CATEGORY),
 			)
 			.put("size", RESULT_LIMIT)
 			.put("hide_unsafe", true)
@@ -131,6 +132,7 @@ internal class KnabenTorrentSearchProvider(
 	private companion object {
 		const val API_URL = "https://api.knaben.org/v1"
 		const val MOVIES_CATEGORY = 3_000_000
+		const val TV_CATEGORY = 5_000_000
 		const val RESULT_LIMIT = 50
 		val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 	}
@@ -144,10 +146,26 @@ internal fun fallbackQueries(movie: MovieTorrentSearchRequest): List<String> = b
 		}
 	}
 
-	movie.year?.let { addUnique("${movie.originalTitle} $it") }
-	movie.year?.let { addUnique("${movie.title} $it") }
-	addUnique(movie.originalTitle)
-	addUnique(movie.title)
+	if (movie.mediaType == MediaType.EPISODE) {
+		val code = movie.episodeCode
+		val seriesTitles = listOfNotNull(movie.originalSeriesTitle, movie.seriesTitle)
+		if (code != null) {
+			seriesTitles.forEach { addUnique("$it $code") }
+			val alternate = movie.seasonNumber?.let { season ->
+				movie.episodeNumber?.let { episode -> "${season}x%02d".format(episode) }
+			}
+			if (alternate != null) seriesTitles.forEach { addUnique("$it $alternate") }
+		}
+		movie.seasonNumber?.let { season ->
+			val seasonCode = "S%02d".format(season)
+			seriesTitles.forEach { addUnique("$it $seasonCode") }
+		}
+	} else {
+		movie.year?.let { addUnique("${movie.originalTitle} $it") }
+		movie.year?.let { addUnique("${movie.title} $it") }
+		addUnique(movie.originalTitle)
+		addUnique(movie.title)
+	}
 }
 
 private fun infoHash(magnet: String): String? =
