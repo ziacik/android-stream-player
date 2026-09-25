@@ -12,6 +12,12 @@ internal interface TorrServerRuntime {
         preferredFilePattern: String?,
         onStartupStats: (TorrentStartupStats) -> Unit,
     ): String = prepareStreamUrl(magnet, onStartupStats)
+    suspend fun prepareStreamUrl(
+        torrentFile: ByteArray,
+        torrentFileName: String,
+        preferredFilePattern: String?,
+        onStartupStats: (TorrentStartupStats) -> Unit,
+    ): String = throw UnsupportedOperationException("Torrent file upload is not supported")
     suspend fun stop()
 }
 
@@ -40,6 +46,18 @@ internal class LocalTorrServerRuntime(
         onStartupStats: (TorrentStartupStats) -> Unit,
     ): String = client.prepareStreamUrl(
         magnet = magnet,
+        preferredFilePattern = preferredFilePattern,
+        onStartupStats = onStartupStats,
+    )
+
+    override suspend fun prepareStreamUrl(
+        torrentFile: ByteArray,
+        torrentFileName: String,
+        preferredFilePattern: String?,
+        onStartupStats: (TorrentStartupStats) -> Unit,
+    ): String = client.prepareStreamUrl(
+        torrentFile = torrentFile,
+        torrentFileName = torrentFileName,
         preferredFilePattern = preferredFilePattern,
         onStartupStats = onStartupStats,
     )
