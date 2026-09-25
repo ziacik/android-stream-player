@@ -44,7 +44,9 @@ internal class KnabenTorrentSearchProvider(
 		val merged = linkedMapOf<String, TorrentSearchResult>()
 
 		fallbackQueries(movie).forEach { query ->
-			searchQuery(query, movie.mediaType).forEach { result ->
+			searchQuery(query, movie.mediaType)
+				.filter { result -> result.matchesEpisodeRequest(movie) }
+				.forEach { result ->
 				val key = result.deduplicationKey()
 				val existing = merged[key]
 				if (existing == null || result.seederCount() > existing.seederCount()) {
@@ -158,7 +160,22 @@ internal fun fallbackQueries(movie: MovieTorrentSearchRequest): List<String> = b
 		}
 		movie.seasonNumber?.let { season ->
 			val seasonCode = "S%02d".format(season)
-			seriesTitles.forEach { addUnique("$it $seasonCode") }
+			seriesTitles.forEach { title ->
+				addUnique("$title $seasonCode")
+				addUnique("$title Season $season")
+				addUnique("$title Season %02d".format(season))
+				addUnique("$title $season. séria")
+				addUnique("$title $season. seria")
+				addUnique("$title Séria $season")
+				addUnique("$title Seria $season")
+				addUnique("$title $season. sezóna")
+				addUnique("$title $season. sezona")
+				addUnique("$title Sezóna $season")
+				addUnique("$title Sezona $season")
+				addUnique("$title $season. série")
+				addUnique("$title Série $season")
+				addUnique(title)
+			}
 		}
 	} else {
 		movie.year?.let { addUnique("${movie.originalTitle} $it") }
@@ -174,3 +191,41 @@ private fun infoHash(magnet: String): String? =
 		?.groupValues
 		?.getOrNull(1)
 		?.lowercase()
+
+
+internal fun TorrentSearchResult.matchesEpisodeRequest(movie: MovieTorrentSearchRequest): Boolean {
+	if (movie.mediaType != MediaType.EPISODE) return true
+	val season = movie.seasonNumber ?: return true
+	val episode = movie.episodeNumber ?: return true
+	val value = title.lowercase()
+
+	val exactEpisodePatterns = listOf(
+		Regex("""(?i)(?<![a-z0-9])s0?$season[ ._-]*e0?$episode(?!\d)"""),
+		Regex("""(?i)(?<!\d)0?$season[ ._-]*x[ ._-]*0?$episode(?!\d)"""),
+		Regex("""(?i)season[ ._-]*0?$season[ ._-]*(?:episode|ep)[ ._-]*0?$episode(?!\d)"""),
+	)
+	if (exactEpisodePatterns.any { it.containsMatchIn(value) }) return true
+
+	val anyEpisodeFromSeasonPatterns = listOf(
+		Regex("""(?i)(?<![a-z0-9])s0?$season[ ._-]*e\d+"""),
+		Regex("""(?i)(?<!\d)0?$season[ ._-]*x[ ._-]*\d+"""),
+		Regex("""(?i)season[ ._-]*0?$season[ ._-]*(?:episode|ep)[ ._-]*\d+"""),
+	)
+	if (anyEpisodeFromSeasonPatterns.any { it.containsMatchIn(value) }) return false
+
+	val seasonPackPatterns = listOf(
+		Regex("""(?i)(?<![a-z0-9])s0?$season(?![ ._-]*e\d)"""),
+		Regex("""(?i)season[ ._-]*0?$season(?![ ._-]*(?:episode|ep)\d)"""),
+		Regex("""(?i)(?:séria|seria|série|sezona|sezóna)[ ._-]*0?$season"""),
+		Regex("""(?i)0?$season[ ._-]*(?:séria|seria|série|sezona|sezóna)"""),
+	)
+	if (seasonPackPatterns.any { it.containsMatchIn(value) }) return true
+
+	val completePackPatterns = listOf(
+		Regex("""(?i)\bcomplete\b"""),
+		Regex("""(?i)\bcomplete[ ._-]*(?:series|collection)\b"""),
+		Regex("""(?i)\ball[ ._-]*seasons\b"""),
+		Regex("""(?i)\bkomplet\b"""),
+	)
+	return completePackPatterns.any { it.containsMatchIn(value) }
+}
