@@ -11,6 +11,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import sk.ziacik.androidstreamplayer.catalog.MediaType
 import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.search.TorrentSearchResult
 import sk.ziacik.androidstreamplayer.torrent.TorrentSource
@@ -41,6 +42,10 @@ class OpenSubtitlesSubtitleProvider internal constructor(
 			.addQueryParameter("languages", LANGUAGES)
 			.addQueryParameter("tmdb_id", movie.tmdbId.toString())
 			.apply {
+				if (movie.mediaType == MediaType.EPISODE) {
+					movie.seasonNumber?.let { addQueryParameter("season_number", it.toString()) }
+					movie.episodeNumber?.let { addQueryParameter("episode_number", it.toString()) }
+				}
 				movieHash?.let { addQueryParameter("moviehash", it) }
 			}
 			.build()
