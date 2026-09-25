@@ -209,6 +209,17 @@ internal fun TorrentSearchResult.matchesEpisodeRequest(movie: MovieTorrentSearch
 	)
 	if (seasonPackPatterns.any { it.containsMatchIn(value) }) return true
 
+	val rangedComplete = Regex(
+		"""(?i)(?:komplet|complete).*?(\d{1,2})\s*\.?\s*[-–—]\s*(\d{1,2})\s*\.?\s*(?:serie|séria|série|season|seasons|sezona|sezóna)""",
+	).find(value)
+	if (rangedComplete != null) {
+		val firstSeason = rangedComplete.groupValues[1].toIntOrNull()
+		val lastSeason = rangedComplete.groupValues[2].toIntOrNull()
+		if (firstSeason != null && lastSeason != null) {
+			return season in minOf(firstSeason, lastSeason)..maxOf(firstSeason, lastSeason)
+		}
+	}
+
 	val completePackPatterns = listOf(
 		Regex("""(?i)\bcomplete\b"""),
 		Regex("""(?i)\bcomplete[ ._-]*(?:series|collection)\b"""),
