@@ -24,6 +24,7 @@ import org.junit.Test
 import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.catalog.MovieCatalog
 import sk.ziacik.androidstreamplayer.catalog.MovieExternalIds
+import sk.ziacik.androidstreamplayer.catalog.SeriesController
 import sk.ziacik.androidstreamplayer.playback.PlaybackUiState
 import sk.ziacik.androidstreamplayer.search.TorrentSearchController
 import sk.ziacik.androidstreamplayer.search.TorrentSearchProvider
@@ -212,13 +213,15 @@ class MovieDetailScreenTest {
 			catalog = FakeCatalog,
 			provider = provider,
 		)
+		val seriesController = SeriesController(scope, FakeCatalog)
 		composeRule.setContent {
 			AndroidStreamPlayerTheme {
 				MovieDetailScreen(
 					movie = matrix(),
+					seriesController = seriesController,
 					torrentController = controller,
 					playbackState = playbackState,
-					onPlay = onPlay,
+					onPlay = { _, result -> onPlay(result) },
 					onBack = {},
 				)
 			}
