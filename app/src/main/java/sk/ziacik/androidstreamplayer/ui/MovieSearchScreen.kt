@@ -92,11 +92,11 @@ fun MovieSearchScreen(
 	val posterRequesters = remember(movieIds) {
 		movieIds.associateWith { FocusRequester() }
 	}
-	val resumeIds = resumeWatching.map { it.movie.tmdbId }
+	val resumeIds = resumeWatching.map { it.movie.resumeKey }
 	val resumeRequesters = remember(resumeIds) {
 		resumeIds.associateWith { FocusRequester() }
 	}
-	val firstResumeRequester = resumeWatching.firstOrNull()?.let { resumeRequesters[it.movie.tmdbId] }
+	val firstResumeRequester = resumeWatching.firstOrNull()?.let { resumeRequesters[it.movie.resumeKey] }
 	val firstPosterRequester = state.results.firstOrNull()?.let { posterRequesters[it.tmdbId] }
 	var initialFocusHandled by remember { mutableStateOf(false) }
 	var resumeActionEntry by remember { mutableStateOf<WatchProgressEntry?>(null) }
@@ -248,7 +248,7 @@ fun MovieSearchScreen(
 				ResumeWatchingActions(
 					entry = entry,
 					onRemove = {
-						onRemoveResumeWatching(entry.movie.tmdbId)
+						onRemoveResumeWatching(entry.movie.resumeKey)
 						resumeActionEntry = null
 					},
 					onCancel = { resumeActionEntry = null },
@@ -285,12 +285,12 @@ private fun ResumeWatchingRow(
 			) { entry ->
 				ResumeWatchingCard(
 					entry = entry,
-					focusRequester = focusRequesters.getValue(entry.movie.tmdbId),
+					focusRequester = focusRequesters.getValue(entry.movie.resumeKey),
 					upFocusRequester = upFocusRequester,
 					onResume = { onResume(entry) },
 					onCancelStarting = onCancelStarting,
 					onOpenActions = { onOpenActions(entry) },
-					isStarting = startingMovieId == entry.movie.tmdbId,
+					isStarting = startingMovieId == entry.movie.resumeKey,
 				)
 			}
 		}
@@ -329,7 +329,7 @@ private fun ResumeWatchingCard(
 		},
 		modifier = Modifier
 			.width(154.dp)
-			.testTag("resume-watching-${entry.movie.tmdbId}")
+			.testTag("resume-watching-${entry.movie.resumeKey}")
 			.focusRequester(focusRequester)
 			.focusProperties { up = upFocusRequester }
 			.onFocusChanged { focused = it.isFocused }
@@ -418,7 +418,7 @@ private fun ResumeWatchingCard(
 						modifier = Modifier
 							.fillMaxSize()
 							.background(Color.Black.copy(alpha = 0.58f))
-							.testTag("resume-watching-starting-${entry.movie.tmdbId}"),
+							.testTag("resume-watching-starting-${entry.movie.resumeKey}"),
 						contentAlignment = Alignment.Center,
 					) {
 						CircularProgressIndicator(
@@ -465,14 +465,14 @@ private fun ResumeWatchingActions(
 	onCancel: () -> Unit,
 ) {
 	val cancelRequester = remember { FocusRequester() }
-	var waitingForConfirmRelease by remember(entry.movie.tmdbId) { mutableStateOf(true) }
+	var waitingForConfirmRelease by remember(entry.movie.resumeKey) { mutableStateOf(true) }
 	var removeFocused by remember { mutableStateOf(false) }
 	var cancelFocused by remember { mutableStateOf(false) }
 	val removeFocusStyle = resumeActionFocusStyle(removeFocused)
 	val cancelFocusStyle = resumeActionFocusStyle(cancelFocused)
 	val buttonShape = RoundedCornerShape(12.dp)
 
-	LaunchedEffect(entry.movie.tmdbId) {
+	LaunchedEffect(entry.movie.resumeKey) {
 		cancelRequester.requestFocus()
 	}
 
