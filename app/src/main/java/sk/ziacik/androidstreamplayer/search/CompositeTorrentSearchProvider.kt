@@ -29,8 +29,14 @@ internal class CompositeTorrentSearchProvider(
 			results.forEach { result ->
 				val key = result.deduplicationKey()
 				val existing = merged[key]
-				if (existing == null || result.seederCount() > existing.seederCount()) {
+				if (existing == null) {
 					merged[key] = result
+				} else {
+					val preferred = if (result.seederCount() > existing.seederCount()) result else existing
+					val authenticatedTorrentUrl = result.torrentFileUrl ?: existing.torrentFileUrl
+					merged[key] = preferred.copy(
+						torrentFileUrl = authenticatedTorrentUrl,
+					)
 				}
 			}
 
