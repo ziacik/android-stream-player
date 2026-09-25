@@ -2,7 +2,6 @@ package sk.ziacik.androidstreamplayer.search
 
 import java.io.IOException
 import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 import sk.ziacik.androidstreamplayer.catalog.MediaType
@@ -165,7 +164,7 @@ internal class SkTorrentSearchProvider(
     }.joinToString(prefix = "magnet:?", separator = "&")
 
     private fun encodeMagnetValue(value: String): String =
-        URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
+        URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
     private fun TorrentSearchResult.infoHashKey(): String = "hash:${id.lowercase()}"
     private fun TorrentSearchResult.seederCount(): Int = seeders ?: -1
