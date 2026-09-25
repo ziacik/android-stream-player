@@ -162,18 +162,6 @@ internal fun fallbackQueries(movie: MovieTorrentSearchRequest): List<String> = b
 			val seasonCode = "S%02d".format(season)
 			seriesTitles.forEach { title ->
 				addUnique("$title $seasonCode")
-				addUnique("$title Season $season")
-				addUnique("$title Season %02d".format(season))
-				addUnique("$title $season. séria")
-				addUnique("$title $season. seria")
-				addUnique("$title Séria $season")
-				addUnique("$title Seria $season")
-				addUnique("$title $season. sezóna")
-				addUnique("$title $season. sezona")
-				addUnique("$title Sezóna $season")
-				addUnique("$title Sezona $season")
-				addUnique("$title $season. série")
-				addUnique("$title Série $season")
 				addUnique(title)
 			}
 		}
