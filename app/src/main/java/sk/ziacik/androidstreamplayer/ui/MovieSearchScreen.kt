@@ -84,6 +84,7 @@ fun MovieSearchScreen(
 	onCancelResumeWatching: () -> Unit = {},
 	onRemoveResumeWatching: (Int) -> Unit = {},
 	startingResumeMovieId: Int? = null,
+	onSettings: () -> Unit = {},
 ) {
 	val state by controller.state.collectAsState()
 	val searchRequester = remember { FocusRequester() }
@@ -164,21 +165,32 @@ fun MovieSearchScreen(
 				MovieSearchHeader(compact = state.results.isNotEmpty())
 				Spacer(Modifier.height(if (state.results.isNotEmpty()) 18.dp else 28.dp))
 
-				OutlinedTextField(
-					value = state.query,
-					onValueChange = controller::setQuery,
-					modifier = Modifier
-						.width(620.dp)
-						.testTag("movie-search-input")
-						.focusRequester(searchRequester)
-						.focusProperties {
-							down = firstResumeRequester ?: firstPosterRequester ?: FocusRequester.Default
-						},
-					placeholder = { Text("Movie title") },
-					singleLine = true,
-					keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-					keyboardActions = KeyboardActions(onSearch = { controller.searchNow() }),
-				)
+				Row(
+					verticalAlignment = Alignment.CenterVertically,
+					horizontalArrangement = Arrangement.spacedBy(14.dp),
+				) {
+					OutlinedTextField(
+						value = state.query,
+						onValueChange = controller::setQuery,
+						modifier = Modifier
+							.width(620.dp)
+							.testTag("movie-search-input")
+							.focusRequester(searchRequester)
+							.focusProperties {
+								down = firstResumeRequester ?: firstPosterRequester ?: FocusRequester.Default
+							},
+						placeholder = { Text("Movie or series") },
+						singleLine = true,
+						keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+						keyboardActions = KeyboardActions(onSearch = { controller.searchNow() }),
+					)
+					TextButton(
+						onClick = onSettings,
+						modifier = Modifier.testTag("settings-nav"),
+					) {
+						Text("Settings")
+					}
+				}
 
 				Spacer(Modifier.height(22.dp))
 
@@ -573,14 +585,14 @@ private fun MovieSearchHeader(compact: Boolean) {
 			color = MaterialTheme.colorScheme.secondary,
 		)
 		Text(
-			text = if (compact) "Search movies" else "What are we watching?",
+			text = if (compact) "Search" else "What are we watching?",
 			fontSize = if (compact) 28.sp else 42.sp,
 			fontWeight = FontWeight.SemiBold,
 			color = MaterialTheme.colorScheme.onBackground,
 		)
 		if (!compact) {
 			Text(
-				text = "Pick the movie first. We’ll find the best available versions after.",
+				text = "Pick a movie or series. We’ll find the best available versions after.",
 				style = MaterialTheme.typography.bodyLarge,
 				color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.64f),
 			)
