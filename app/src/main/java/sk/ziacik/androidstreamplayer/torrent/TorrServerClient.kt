@@ -87,6 +87,7 @@ internal class TorrServerClient(
     suspend fun prepareStreamUrl(
         magnet: String,
         timeoutMs: Long = METADATA_TIMEOUT_MS,
+        preferredFilePattern: String? = null,
         onStartupStats: (TorrentStartupStats) -> Unit = {},
     ): String {
         require(timeoutMs > 0) { "timeoutMs must be positive" }
@@ -112,10 +113,11 @@ internal class TorrServerClient(
             )
         }
 
-        val file = ready.files
-            .asSequence()
+        val videoFiles = ready.files
             .filter { it.path.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS }
-            .maxByOrNull { it.length }
+        val file = preferredFilePattern
+            ?.let { pattern -> videoFiles.filter { episodeFileMatches(it.path, pattern) }.maxByOrNull { it.length } }
+            ?: videoFiles.maxByOrNull { it.length }
             ?: throw IOException("Torrent contains no playable video file")
         val fileName = File(file.path).name
 
@@ -345,6 +347,20 @@ internal class TorrServerClient(
     private fun url(pathSegment: String): HttpUrl = baseUrl.newBuilder()
         .addPathSegment(pathSegment)
         .build()
+
+    private fun episodeFileMatches(path: String, preferredFilePattern: String): Boolean {
+        val direct = preferredFilePattern.uppercase()
+        if (path.uppercase().contains(direct)) return true
+
+        val match = Regex("""S(\d{1,2})E(\d{1,3})""", RegexOption.IGNORE_CASE)
+            .find(preferredFilePattern)
+            ?: return false
+        val season = match.groupValues[1].toIntOrNull() ?: return false
+        val episode = match.groupValues[2].toIntOrNull() ?: return false
+        return Regex(
+            """(?i)(?:S0?${season}[ ._-]*E0?${episode}|(?<!\d)0?${season}x0?${episode}(?!\d))""",
+        ).containsMatchIn(path)
+    }
 
     private data class TorrServerTorrentInfo(
         val hash: String,
