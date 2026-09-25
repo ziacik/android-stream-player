@@ -75,6 +75,36 @@ class TorrServerClientTest {
     }
 
     @Test
+    fun prepareStreamSelectsRequestedEpisodeFromSeasonPack() = runTest {
+        val transport = FakeTransport(
+            responses = mutableListOf(
+                TorrServerHttpResponse(
+                    code = 200,
+                    body = """{"hash":"series123","file_stats":[
+                        {"id":1,"path":"Za.Sklom.S02E07.720p.mkv","length":9000},
+                        {"id":2,"path":"Za.Sklom.S02E08.720p.mkv","length":7000},
+                        {"id":3,"path":"Za.Sklom.S02E09.720p.mkv","length":10000}
+                    ]}""",
+                ),
+                TorrServerHttpResponse(code = 200, body = ""),
+            ),
+        )
+        val client = TorrServerClient(
+            transport = transport,
+            pollIntervalMs = 1,
+        )
+
+        val url = client.prepareStreamUrl(
+            magnet = "magnet:?xt=urn:btih:series",
+            timeoutMs = 1_000,
+            preferredFilePattern = "S02E08",
+        ).toHttpUrl()
+
+        assertEquals("/stream/Za.Sklom.S02E08.720p.mkv", url.encodedPath)
+        assertEquals("2", url.queryParameter("index"))
+    }
+
+    @Test
     fun configureStreamingSettingsPreservesExistingSettingsAndDisablesUpload() = runTest {
         val transport = FakeTransport(
             responses = mutableListOf(
