@@ -129,7 +129,7 @@ class TorrServerClientTest {
         val upload = transport.requests.first()
         assertEquals("/torrent/upload", upload.url.encodedPath)
         assertEquals("POST", upload.method)
-        assertTrue(upload.header("Content-Type").orEmpty().startsWith("multipart/form-data"))
+        assertTrue(upload.body?.contentType().toString().startsWith("multipart/form-data"))
         assertEquals("/stream/episode.mkv", url.encodedPath)
         assertEquals("private123", url.queryParameter("link"))
         assertEquals("5", url.queryParameter("index"))
