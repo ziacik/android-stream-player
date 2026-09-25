@@ -107,6 +107,7 @@ internal object WatchProgressJson {
 		.put("id", result.id)
 		.put("title", result.title)
 		.put("magnetUri", result.magnetUri)
+		.putNullable("torrentFileUrl", result.torrentFileUrl)
 		.putNullable("quality", result.quality)
 		.putNullable("sizeBytes", result.sizeBytes)
 		.putNullable("seeders", result.seeders)
@@ -117,6 +118,7 @@ internal object WatchProgressJson {
 		id = value.getString("id"),
 		title = value.getString("title"),
 		magnetUri = value.getString("magnetUri"),
+		torrentFileUrl = value.nullableString("torrentFileUrl"),
 		quality = value.nullableString("quality"),
 		sizeBytes = value.nullableLong("sizeBytes"),
 		seeders = value.nullableInt("seeders"),
