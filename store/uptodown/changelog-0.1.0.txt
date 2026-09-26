@@ -1,0 +1,10 @@
+Initial public release.
+
+- Android TV movie browsing with trending titles and search
+- TMDB movie metadata, posters and ratings
+- Torrent source search with parsed quality, codec, audio and language badges
+- Local TorrServer playback through the built-in player
+- Resume watching support
+- D-pad-first Home, Search, detail and playback navigation
+- arm64-v8a and armeabi-v7a support
+- No ads or in-app purchases
