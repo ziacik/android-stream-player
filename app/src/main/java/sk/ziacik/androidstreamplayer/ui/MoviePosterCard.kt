@@ -51,12 +51,12 @@ fun MoviePosterCard(
 	onClick: () -> Unit,
 	focusRequester: FocusRequester,
 	onFocused: () -> Unit,
+	modifier: Modifier = Modifier,
 	upFocusRequester: FocusRequester? = null,
 	downFocusRequester: FocusRequester? = null,
 	leftFocusRequester: FocusRequester? = null,
 	rightFocusRequester: FocusRequester? = null,
 	testTag: String = "movie-${movie.tmdbId}",
-	modifier: Modifier = Modifier,
 ) {
 	var focused by remember { mutableStateOf(false) }
 	val scale by animateFloatAsState(
