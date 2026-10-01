@@ -1,6 +1,7 @@
 package sk.ziacik.androidstreamplayer.watch
 
 import android.content.Context
+import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
 import sk.ziacik.androidstreamplayer.catalog.MediaType
@@ -15,15 +16,15 @@ class SharedPreferencesWatchProgressStorage(context: Context) : WatchProgressSto
 	)
 
 	override fun save(entries: List<WatchProgressEntry>) {
-		preferences.edit()
-			.putString(KEY_ENTRIES, WatchProgressJson.encode(entries))
-			.apply()
+		preferences.edit {
+			putString(KEY_ENTRIES, WatchProgressJson.encode(entries))
+		}
 	}
 
 	override fun saveDurably(entries: List<WatchProgressEntry>) {
-		preferences.edit()
-			.putString(KEY_ENTRIES, WatchProgressJson.encode(entries))
-			.commit()
+		preferences.edit(commit = true) {
+			putString(KEY_ENTRIES, WatchProgressJson.encode(entries))
+		}
 	}
 
 	private companion object {
