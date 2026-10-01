@@ -9,6 +9,7 @@ import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.catalog.MovieCatalog
 import sk.ziacik.androidstreamplayer.catalog.MovieExternalIds
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class TorrentSearchEnrichmentTest {
 	@Test
 	fun `controller enriches raw provider results with release metadata`() = runTest {
