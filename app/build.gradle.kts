@@ -120,7 +120,7 @@ android {
     }
 
     sourceSets {
-        getByName("main").jniLibs.directories.add(generatedTorrServerJniLibsDir)
+        getByName("main").jniLibs.directories.add(generatedTorrServerJniLibsDir.absolutePath)
     }
 
     packaging {
