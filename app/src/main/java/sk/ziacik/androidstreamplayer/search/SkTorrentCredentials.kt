@@ -1,6 +1,7 @@
 package sk.ziacik.androidstreamplayer.search
 
 import android.content.Context
+import androidx.core.content.edit
 
 data class SkTorrentCredentials(
     val username: String,
@@ -30,14 +31,14 @@ class SharedPreferencesSkTorrentCredentialsStore(context: Context) : SkTorrentCr
             clear()
             return
         }
-        preferences.edit()
-            .putString(KEY_USERNAME, credentials.username.trim())
-            .putString(KEY_PASSWORD, credentials.password)
-            .apply()
+        preferences.edit {
+            putString(KEY_USERNAME, credentials.username.trim())
+            putString(KEY_PASSWORD, credentials.password)
+        }
     }
 
     override fun clear() {
-        preferences.edit().clear().apply()
+        preferences.edit { clear() }
     }
 
     private companion object {
