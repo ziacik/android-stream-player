@@ -10,6 +10,7 @@ import sk.ziacik.androidstreamplayer.torrent.TorrentSource
 import sk.ziacik.androidstreamplayer.torrent.TorrentStartupStats
 import sk.ziacik.androidstreamplayer.torrent.TorrentStreamer
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class PlaybackStartupStatsTest {
 	@Test
 	fun `live startup stats are published while selected torrent is preparing`() = runTest {
