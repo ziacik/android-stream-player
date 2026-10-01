@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.compile.JavaCompile
 import java.net.URI
 import java.security.MessageDigest
 
@@ -105,12 +106,12 @@ val prepareTorrServerBinary = tasks.register("prepareTorrServerBinary") {
 
 android {
     namespace = "sk.ziacik.androidstreamplayer"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "sk.ziacik.androidstreamplayer"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -134,10 +135,26 @@ android {
         buildConfig = true
     }
 
+    lint {
+        warningsAsErrors = true
+        abortOnError = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
+
+
+kotlin {
+    compilerOptions {
+        allWarningsAsErrors.set(true)
+    }
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
 }
 
 val verifyTmdbApiKey = tasks.register("verifyTmdbApiKey") {
