@@ -12,6 +12,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class TorrServerStartupPollingTest {
 	@Test
 	fun `prepare polls and reports torrent status while preload is still running`() = runTest {
