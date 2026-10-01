@@ -12,6 +12,7 @@ import sk.ziacik.androidstreamplayer.catalog.Movie
 import sk.ziacik.androidstreamplayer.catalog.MovieCatalog
 import sk.ziacik.androidstreamplayer.catalog.MovieExternalIds
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class TorrentSearchControllerTest {
 	@Test
 	fun `open resolves imdb id before torrent search`() = runTest {
