@@ -1,3 +1,5 @@
+import org.gradle.api.logging.configuration.WarningMode
+
 pluginManagement {
     repositories {
         google()
@@ -16,3 +18,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "AndroidStreamPlayer"
 include(":app")
+
+gradle.startParameter.warningMode = WarningMode.Fail
